@@ -2,9 +2,10 @@
 // Holds the family tree data and saves it on this device (in the browser).
 //
 // The tree is stored as:
-//   people:  { id: { id, first, father, family } }
-//   parents: [ { parent, child } ]   one entry per parent-child link
-//   spouses: [ { a, b } ]            one entry per marriage
+//   people:  { id: { id, first, father, family, gender } }   gender is "m" or "f"
+//   parents: [ { parent, child } ]           one entry per parent-child link
+//   spouses: [ { a, b, former } ]            one entry per marriage, in the order added;
+//                                            former is true after a divorce or a death
 //   meId:    the id of the person the app is centred on (Laith)
 // Every other relationship (sibling, cousin, uncle) is worked out from these.
 
@@ -74,14 +75,32 @@ export function spousesOf(id) {
     .filter(Boolean);
 }
 
+// Words for how `otherId` is linked to `id` as a spouse: "Wife", "Former husband".
+export function spouseWord(id, otherId) {
+  const link = tree.spouses.find((l) => (l.a === id && l.b === otherId) || (l.b === id && l.a === otherId));
+  const other = tree.people[otherId];
+  const word = other?.gender === "m" ? "husband" : other?.gender === "f" ? "wife" : "spouse";
+  return link?.former ? "Former " + word : word.charAt(0).toUpperCase() + word.slice(1);
+}
+
+// People whose name matches what is being typed, so a copy is not added by mistake.
+export function findMatches({ first, father, family }) {
+  const same = (a, b) => clean(a).toLowerCase() === clean(b).toLowerCase();
+  if (!clean(first) || !clean(family)) return [];
+  return allPeople().filter((p) =>
+    same(p.first, first) && same(p.family, family) && (!clean(father) || same(p.father, father)));
+}
+
 export function fullName(p) {
   return [p.first, p.father, p.family].filter(Boolean).join(" ");
 }
 
-// "son/daughter of X and Y", used wherever names could repeat.
-export function parentsLabel(p) {
-  const names = parentsOf(p.id).map((x) => x.first);
-  return names.length ? "Child of " + names.join(" and ") : "";
+// "Son of X and Y", used wherever names could repeat.
+export function parentsLabel(p, { full = false } = {}) {
+  const names = parentsOf(p.id).map((x) => (full ? fullName(x) : x.first));
+  if (!names.length) return "";
+  const word = p.gender === "m" ? "Son" : p.gender === "f" ? "Daughter" : "Child";
+  return word + " of " + names.join(full ? " and " : " & ");
 }
 
 // ---- Rules for links ----
@@ -117,8 +136,14 @@ export function checkSpouseLink(aId, bId) {
 
 // ---- Changing ----
 
-export function addPerson({ first, father, family }) {
-  const person = { id: newId(), first: clean(first), father: clean(father), family: clean(family) };
+export function addPerson({ first, father, family, gender }) {
+  const person = {
+    id: newId(),
+    first: clean(first),
+    father: clean(father),
+    family: clean(family),
+    gender: gender === "m" || gender === "f" ? gender : null,
+  };
   if (!person.first) throw new Error("First name is needed.");
   tree.people[person.id] = person;
   return person;
@@ -135,10 +160,10 @@ export function linkParent(parentId, childId) {
   tree.parents.push({ parent: parentId, child: childId });
 }
 
-export function linkSpouse(aId, bId) {
+export function linkSpouse(aId, bId, former = false) {
   const problem = checkSpouseLink(aId, bId);
   if (problem) throw new Error(problem);
-  tree.spouses.push({ a: aId, b: bId });
+  tree.spouses.push({ a: aId, b: bId, former: !!former });
 }
 
 // Runs several changes as one step: either all of them are saved, or none.
