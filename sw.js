@@ -2,7 +2,7 @@
 // Lets the app open without internet. It always tries the newest version
 // first and falls back to the saved copy when offline.
 
-const CACHE = "family-tree-v1";
+const CACHE = "family-tree-v2";
 const FILES = ["./", "index.html", "styles.css", "app.js", "store.js", "manifest.webmanifest", "icon.png"];
 
 self.addEventListener("install", (e) => {

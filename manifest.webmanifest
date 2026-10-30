@@ -3,7 +3,7 @@
   "short_name": "Family Tree",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#f6f3ee",
-  "theme_color": "#f6f3ee",
+  "background_color": "#efeeec",
+  "theme_color": "#efeeec",
   "icons": [{ "src": "icon.png", "sizes": "512x512", "type": "image/png" }]
 }
