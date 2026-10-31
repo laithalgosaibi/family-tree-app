@@ -52,6 +52,11 @@ export function getMe() {
   return tree.meId ? tree.people[tree.meId] : null;
 }
 
+// The whole tree, for drawing the chart. Read it, do not change it.
+export function getData() {
+  return tree;
+}
+
 export function getPerson(id) {
   return tree.people[id] || null;
 }
