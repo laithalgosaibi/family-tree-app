@@ -12,9 +12,12 @@ Plain web files, no build step, so any change is live as soon as it is saved:
 - `store.js` the family data and how it is saved
 - `layout.js` works out where each box and line goes on the chart
 - `chart.js` draws the chart and handles drag and zoom
+- `ui.js` small shared pieces (making elements, the pop-up sheet)
+- `backup.js` export and import of `.family` files, and the backup reminder
 - `sw.js` lets the app open without internet
 
 Everything is saved in the browser on the device being used. Nothing is sent anywhere.
+To move the tree between devices, or keep a safe copy, use the ··· button: Export a backup, then Import a file on the other device.
 
 ## Try it on a computer
 
@@ -24,7 +27,7 @@ From this folder run `python3 -m http.server` and open http://localhost:8000
 
 1. Add people and links (done)
 2. Chart with zoom, drag and centring on me (done)
-3. Export and import a file, plus backup reminder
+3. Export and import a file, plus backup reminder (done)
 4. Fix mistakes: edit, delete, change links, undo
 5. Collapse and expand branches
 6. Relationship to me in words

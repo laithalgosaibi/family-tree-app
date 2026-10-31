@@ -31,6 +31,7 @@ function load() {
 
 function save() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(tree));
+  countChange();
   listeners.forEach((fn) => fn());
 }
 
@@ -154,9 +155,9 @@ export function addPerson({ first, father, family, gender }) {
   return person;
 }
 
+// Use inside change(), which saves.
 export function setMe(id) {
   tree.meId = id;
-  save();
 }
 
 export function linkParent(parentId, childId) {
@@ -189,4 +190,126 @@ export function askToKeepData() {
   if (navigator.storage && navigator.storage.persist) {
     navigator.storage.persist().catch(() => {});
   }
+}
+
+// ---- Backups: export, import and the reminder ----
+//
+// A backup is a ".family" file. Inside it is plain text (JSON) holding the whole tree,
+// so it can be opened on any device with this app.
+// How many changes were made since the last backup is kept separately, under BACKUP_KEY:
+//   lastBackup:   when the tree was last exported or imported (a time in ms), or null
+//   changes:      how many changes were saved since then
+//   firstChange:  when the first of those changes was made
+//   snoozeUntil:  "Not now" was pressed, so stay quiet until this time
+
+const BACKUP_KEY = "familyTree.backup.v1";
+const FILE_KIND = "family-tree";
+
+function readBackupInfo() {
+  try {
+    return { lastBackup: null, changes: 0, firstChange: null, snoozeUntil: 0,
+      ...JSON.parse(localStorage.getItem(BACKUP_KEY) || "{}") };
+  } catch {
+    return { lastBackup: null, changes: 0, firstChange: null, snoozeUntil: 0 };
+  }
+}
+
+function writeBackupInfo(info) {
+  try { localStorage.setItem(BACKUP_KEY, JSON.stringify(info)); } catch { /* not important enough to stop the app */ }
+}
+
+function countChange() {
+  const info = readBackupInfo();
+  info.changes += 1;
+  if (!info.firstChange) info.firstChange = Date.now();
+  writeBackupInfo(info);
+}
+
+export function backupInfo() {
+  return readBackupInfo();
+}
+
+// Call this once the file has been saved, so the counting starts again.
+export function markBackedUp() {
+  writeBackupInfo({ lastBackup: Date.now(), changes: 0, firstChange: null, snoozeUntil: 0 });
+}
+
+// "Not now": ask again tomorrow.
+export function snoozeReminder() {
+  const info = readBackupInfo();
+  info.snoozeUntil = Date.now() + 24 * 60 * 60 * 1000;
+  writeBackupInfo(info);
+}
+
+const WEEK = 7 * 24 * 60 * 60 * 1000;
+export const CHANGES_BEFORE_REMINDER = 10;
+
+// True when it is time to remind: 10 changes since the last backup,
+// or a week has passed and something changed in that time. Whichever comes first.
+export function reminderDue(now = Date.now()) {
+  const info = readBackupInfo();
+  if (!tree.meId || info.changes === 0 || now < info.snoozeUntil) return false;
+  if (info.changes >= CHANGES_BEFORE_REMINDER) return true;
+  const since = info.lastBackup || info.firstChange || now;
+  return now - since >= WEEK;
+}
+
+// The whole tree as the text that goes inside a ".family" file.
+export function exportText(device) {
+  return JSON.stringify({
+    kind: FILE_KIND,
+    format: 1,
+    exportedAt: new Date().toISOString(),
+    device: device || null,
+    tree,
+  }, null, 2);
+}
+
+// Reads the text of a file and checks it is a family tree from this app.
+// Returns { tree, exportedAt, device, count } or throws an error that says what is wrong.
+export function readFile(text) {
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error("This file is not a family tree backup. Choose a .family file exported from this app.");
+  }
+  if (!data || data.kind !== FILE_KIND || !data.tree || typeof data.tree !== "object")
+    throw new Error("This file is not a family tree backup. Choose a .family file exported from this app.");
+  if (data.format > 1)
+    throw new Error("This backup was made by a newer version of the app. Reload the app and try again.");
+
+  const src = data.tree;
+  const people = {};
+  for (const [id, p] of Object.entries(src.people || {})) {
+    if (!p || typeof p !== "object" || typeof p.first !== "string" || !p.first.trim()) continue;
+    people[id] = {
+      id,
+      first: clean(p.first),
+      father: clean(typeof p.father === "string" ? p.father : ""),
+      family: clean(typeof p.family === "string" ? p.family : ""),
+      gender: p.gender === "m" || p.gender === "f" ? p.gender : null,
+    };
+  }
+  const known = (id) => typeof id === "string" && !!people[id];
+  const parents = (Array.isArray(src.parents) ? src.parents : [])
+    .filter((l) => l && known(l.parent) && known(l.child) && l.parent !== l.child)
+    .map((l) => ({ parent: l.parent, child: l.child }));
+  const spouses = (Array.isArray(src.spouses) ? src.spouses : [])
+    .filter((l) => l && known(l.a) && known(l.b) && l.a !== l.b)
+    .map((l) => ({ a: l.a, b: l.b, former: !!l.former }));
+  const safe = { version: 1, people, parents, spouses, meId: known(src.meId) ? src.meId : null };
+
+  const count = Object.keys(people).length;
+  if (!count) throw new Error("This backup has nobody in it, so there is nothing to import.");
+  if (!safe.meId) throw new Error("This backup does not say who “you” are, so it cannot be opened.");
+  return { tree: safe, exportedAt: data.exportedAt || null, device: data.device || null, count };
+}
+
+// Swaps the tree on this device for the one from a file. Everything here before is replaced.
+export function replaceTree(newTree) {
+  tree = JSON.parse(JSON.stringify(newTree));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(tree));
+  markBackedUp(); // the tree now matches a file, so nothing is at risk
+  listeners.forEach((fn) => fn());
 }
