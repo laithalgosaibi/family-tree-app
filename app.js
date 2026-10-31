@@ -3,8 +3,10 @@
 
 import * as store from "./store.js";
 import { createChart } from "./chart.js";
-import { h, kicker, openSheet, closeSheet, sheet } from "./ui.js";
+import { h, kicker, openSheet, closeSheet, sheet, makeSegment } from "./ui.js";
 import * as backup from "./backup.js";
+import * as edit from "./edit.js";
+import * as undo from "./undo.js";
 
 const main = document.getElementById("main");
 
@@ -70,8 +72,8 @@ function buildChart() {
 
   // The panel covers part of the chart, so the controls move out of its way.
   new ResizeObserver(() => {
-    main.style.setProperty("--panel-h", panel.hidden ? "0px" : panel.offsetHeight + "px");
-    main.style.setProperty("--panel-w", panel.hidden ? "0px" : panel.offsetWidth + "px");
+    document.body.style.setProperty("--panel-h", panel.hidden ? "0px" : panel.offsetHeight + "px");
+    document.body.style.setProperty("--panel-w", panel.hidden ? "0px" : panel.offsetWidth + "px");
   }).observe(panel);
 }
 
@@ -90,8 +92,8 @@ function closePanel() {
   if (!panel || panel.hidden) return;
   panel.hidden = true;
   panelId = null;
-  main.style.setProperty("--panel-h", "0px");
-  main.style.setProperty("--panel-w", "0px");
+  document.body.style.setProperty("--panel-h", "0px");
+  document.body.style.setProperty("--panel-w", "0px");
   chart.select(null);
 }
 
@@ -159,7 +161,7 @@ function showPerson(id, { centre = false, move = true } = {}) {
   panel.replaceChildren(...[
     h("div", { class: "grabber", "aria-hidden": "true" }),
     h("div", { class: "card-top" },
-      h("span", {}),
+      h("button", { class: "text-btn", onclick: () => edit.showEdit(id) }, "Edit"),
       h("button", { class: "icon-btn", "aria-label": "Close", onclick: closePanel }, "×")),
     isMe && kicker("You"),
     h("h2", { class: "person-name" }, store.fullName(p)),
@@ -177,8 +179,8 @@ function showPerson(id, { centre = false, move = true } = {}) {
     group("Children", children, (c) => store.parentsLabel(c) || childWord(c)),
   ].filter(Boolean));
   if (!samePerson) panel.scrollTop = 0;
-  main.style.setProperty("--panel-h", panel.offsetHeight + "px");
-  main.style.setProperty("--panel-w", panel.offsetWidth + "px");
+  document.body.style.setProperty("--panel-h", panel.offsetHeight + "px");
+  document.body.style.setProperty("--panel-w", panel.offsetWidth + "px");
   chart.select(id);
   if (move) chart.centreOn(id, { onlyIfHidden: !centre });
 }
@@ -347,6 +349,12 @@ function showForm(kind, anchorId) {
           store.linkParent(anchor.id, id);
           if (otherParent && !store.checkParentLink(otherParent, id)) store.linkParent(otherParent, id);
         } else store.linkSpouse(anchor.id, id, former);
+        return id;
+      }, (id) => {
+        const name = store.fullName(store.getPerson(id));
+        if (kind === "me") return { message: "You were added. Welcome to your tree." };
+        if (existingId) return { message: `${name} was linked to ${anchor.first}.` };
+        return { message: `${name} was added.` };
       });
       closeSheet();
       if (kind !== "me") showPerson(anchor.id, { move: false });
@@ -379,30 +387,13 @@ function showForm(kind, anchorId) {
   update();
 }
 
-// A row of two buttons where one is picked, like Son | Daughter.
-function makeSegment(label, options, picked, onPick, disabledValues = []) {
-  const buttons = options.map(([value, text]) =>
-    h("button", {
-      type: "button",
-      class: "seg",
-      "aria-pressed": String(value === picked),
-      disabled: disabledValues.includes(value),
-      onclick: () => {
-        buttons.forEach((b) => b.setAttribute("aria-pressed", String(b === buttons[options.findIndex(([v]) => v === value)])));
-        onPick(value);
-      },
-    }, text));
-  return h("div", { class: "field" },
-    h("span", { class: "field-label" }, label),
-    h("div", { class: "segment" }, buttons));
-}
-
 // ---- Start ----
 
 store.onChange(renderHome);
 renderHome();
 
 document.getElementById("menu-btn").addEventListener("click", backup.showMenu);
+undo.init();
 backup.init({
   // A new tree came in from a file: draw it fresh and centre on "me".
   onImported: () => {
