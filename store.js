@@ -172,17 +172,122 @@ export function linkSpouse(aId, bId, former = false) {
   tree.spouses.push({ a: aId, b: bId, former: !!former });
 }
 
+// ---- Fixing mistakes ----
+
+export function updatePerson(id, { first, father, family, gender }) {
+  const p = tree.people[id];
+  if (!p) throw new Error("This person is no longer in the tree.");
+  if (!clean(first)) throw new Error("First name is needed.");
+  p.first = clean(first);
+  p.father = clean(father);
+  p.family = clean(family);
+  p.gender = gender === "m" || gender === "f" ? gender : null;
+}
+
+export function unlinkParent(parentId, childId) {
+  tree.parents = tree.parents.filter((l) => !(l.parent === parentId && l.child === childId));
+}
+
+const isCouple = (l, a, b) => (l.a === a && l.b === b) || (l.a === b && l.b === a);
+
+export function unlinkSpouse(aId, bId) {
+  tree.spouses = tree.spouses.filter((l) => !isCouple(l, aId, bId));
+}
+
+export function isFormerSpouse(aId, bId) {
+  return !!tree.spouses.find((l) => isCouple(l, aId, bId))?.former;
+}
+
+// former: true after a divorce or a death, false for a current marriage.
+export function setFormer(aId, bId, former) {
+  const link = tree.spouses.find((l) => isCouple(l, aId, bId));
+  if (link) link.former = !!former;
+}
+
+// How many links a person has, for the warning before deleting them.
+export function linkCounts(id) {
+  return { parents: parentsOf(id).length, spouses: spousesOf(id).length, children: childrenOf(id).length };
+}
+
+// Everyone joined to "me" through any chain of links, leaving out `withoutId`.
+function connectedToMe(withoutId) {
+  const seen = new Set();
+  if (!tree.meId || tree.meId === withoutId) return seen;
+  const queue = [tree.meId];
+  seen.add(tree.meId);
+  while (queue.length) {
+    const id = queue.shift();
+    for (const n of [...parentsOf(id), ...childrenOf(id), ...spousesOf(id)]) {
+      if (n.id === withoutId || seen.has(n.id)) continue;
+      seen.add(n.id);
+      queue.push(n.id);
+    }
+  }
+  return seen;
+}
+
+// The people who are joined to "me" now, but would not be if `id` was deleted.
+export function cutOffBy(id) {
+  const now = connectedToMe(null);
+  const after = connectedToMe(id);
+  return [...now].filter((x) => x !== id && !after.has(x)).map((x) => tree.people[x]);
+}
+
+// Removes a person and every link to them. The people they were linked to stay.
+export function deletePerson(id) {
+  if (id === tree.meId) throw new Error("You are the centre of the tree, so you cannot be deleted.");
+  if (!tree.people[id]) throw new Error("This person is no longer in the tree.");
+  delete tree.people[id];
+  tree.parents = tree.parents.filter((l) => l.parent !== id && l.child !== id);
+  tree.spouses = tree.spouses.filter((l) => l.a !== id && l.b !== id);
+}
+
 // Runs several changes as one step: either all of them are saved, or none.
-export function change(fn) {
+// `note` says what changed, for the undo message: { message, detail },
+// or a function that gets what `fn` returned and gives that back.
+export function change(fn, note) {
   const before = JSON.stringify(tree);
   try {
     const result = fn();
+    if (JSON.stringify(tree) === before) return result; // nothing actually changed
+    const words = (typeof note === "function" ? note(result) : note) || { message: "Change saved." };
+    history.push({ before, note: words });
+    if (history.length > MAX_UNDO) history.shift();
     save();
+    historyListeners.forEach((f) => f(words));
     return result;
   } catch (err) {
     tree = JSON.parse(before);
     throw err;
   }
+}
+
+// ---- Undo ----
+// Before each change, a copy of the whole tree is kept here (newest last).
+// Undo puts the newest copy back. The copies are kept only while the app is open.
+
+const MAX_UNDO = 30;
+const history = [];
+const historyListeners = new Set();
+
+// fn(note) runs after every change, with the words for what changed.
+export function onHistory(fn) {
+  historyListeners.add(fn);
+}
+
+// What the next undo would take back, or null if there is nothing to undo.
+export function lastChange() {
+  return history.length ? history[history.length - 1].note : null;
+}
+
+// Takes back the last change. Returns the words for it, or null if there was nothing.
+// Undoing counts as a change for the backup reminder, because the tree is different again.
+export function undo() {
+  const last = history.pop();
+  if (!last) return null;
+  tree = JSON.parse(last.before);
+  save();
+  return last.note;
 }
 
 // Ask the browser to keep our data even when space is low.
@@ -309,6 +414,7 @@ export function readFile(text) {
 // Swaps the tree on this device for the one from a file. Everything here before is replaced.
 export function replaceTree(newTree) {
   tree = JSON.parse(JSON.stringify(newTree));
+  history.length = 0; // undo cannot reach back past an import
   localStorage.setItem(STORAGE_KEY, JSON.stringify(tree));
   markBackedUp(); // the tree now matches a file, so nothing is at risk
   listeners.forEach((fn) => fn());

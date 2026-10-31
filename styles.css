@@ -609,3 +609,94 @@ body.chart-mode main {
 /* A ring only when moving with the keyboard, not after a tap */
 button:focus { outline: none; }
 button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+/* ---- Fixing mistakes: edit, delete, undo ---- */
+
+.card-top .text-btn { padding: 6px 0; }
+
+/* Links in the edit sheet, each with Unlink */
+.link-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; }
+.link-row .row-sub { overflow-wrap: anywhere; }
+.link-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex: none; }
+.link-actions .text-btn { padding: 4px 0; text-align: right; }
+.text-btn.small-text { font-size: 15px; font-weight: 500; color: var(--muted); }
+.link-row.removed .row-name { text-decoration: line-through; color: var(--faint); }
+.link-row.removed .row-sub { color: var(--danger); }
+.delete-btn { margin-top: 22px; }
+.delete-hint { margin-top: 22px; }
+
+/* The "are you sure?" card */
+dialog.confirm {
+  width: calc(100% - 40px);
+  max-width: 400px;
+  margin: auto;
+  padding: 22px 22px 18px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+dialog.confirm::backdrop { background: rgba(20, 18, 15, 0.35); }
+.confirm-icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border: 1px solid var(--danger);
+  border-radius: 50%;
+  color: var(--danger);
+}
+.icon.big { width: 22px; height: 22px; }
+.confirm-title { margin: 14px 0 10px; font-family: var(--font-heading); font-weight: 500; font-size: 26px; line-height: 1.15; overflow-wrap: anywhere; }
+dialog.confirm p { margin: 0 0 12px; }
+dialog.confirm .warn { color: var(--danger); font-size: 15px; }
+.confirm-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 18px; }
+.keep-btn { border-color: var(--line); color: var(--ink); min-width: 80px; }
+.danger-btn { display: flex; align-items: center; gap: 6px; border-color: var(--danger); color: var(--danger); }
+.danger-btn:not(:disabled):active { background: transparent; opacity: 0.7; }
+
+/* The message after a change, with Undo. Above the person card on phone. */
+.toast {
+  position: fixed;
+  z-index: 5;
+  left: 12px;
+  right: 12px;
+  bottom: calc(12px + var(--panel-h, 0px) + env(safe-area-inset-bottom));
+  max-width: 520px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px 14px;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.14);
+  animation: toast-in 0.2s ease;
+}
+.toast-text { flex: 1; min-width: 0; }
+.toast-message { margin: 0; font-size: 16px; overflow-wrap: anywhere; }
+.toast-detail { margin: 2px 0 0; font-size: 14px; color: var(--muted); overflow-wrap: anywhere; }
+.toast .btn { flex: none; }
+.toast-time {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 2px;
+  background: var(--gold);
+  transform-origin: left;
+  animation: toast-time linear forwards;
+}
+@keyframes toast-time { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+@keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@media (min-width: 700px) {
+  .toast { bottom: 20px; right: calc(20px + var(--panel-w, 0px)); left: 20px; }
+}
+@media (prefers-reduced-motion: reduce) { .toast { animation: none; } }
+
+/* The ··· menu */
+.menu-undo { margin-bottom: 22px; }
+.menu-caps { margin-bottom: 8px; }
