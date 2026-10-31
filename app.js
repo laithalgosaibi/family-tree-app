@@ -3,47 +3,14 @@
 
 import * as store from "./store.js";
 import { createChart } from "./chart.js";
+import { h, kicker, openSheet, closeSheet, sheet } from "./ui.js";
+import * as backup from "./backup.js";
 
 const main = document.getElementById("main");
-const sheet = document.getElementById("sheet");
-const sheetBody = document.getElementById("sheet-body");
-
-// ---- Small helpers ----
-
-function h(tag, attrs = {}, ...children) {
-  const el = document.createElement(tag);
-  for (const [key, value] of Object.entries(attrs)) {
-    if (value === false || value == null) continue;
-    if (key.startsWith("on")) el.addEventListener(key.slice(2), value);
-    else if (key === "class") el.className = value;
-    else el.setAttribute(key, value === true ? "" : value);
-  }
-  for (const child of children.flat()) {
-    if (child == null || child === false) continue;
-    el.append(child.nodeType ? child : document.createTextNode(child));
-  }
-  return el;
-}
 
 function byName(a, b) {
   return store.fullName(a).localeCompare(store.fullName(b));
 }
-
-function openSheet(content) {
-  sheetBody.replaceChildren(h("div", { class: "grabber", "aria-hidden": "true" }), content);
-  if (!sheet.open) sheet.showModal();
-  sheetBody.scrollTop = 0;
-}
-
-function closeSheet() {
-  sheet.close();
-}
-
-sheet.addEventListener("click", (e) => {
-  if (e.target === sheet) closeSheet(); // tap outside the card closes it
-});
-
-const kicker = (text) => h("p", { class: "kicker" }, text);
 
 // Words for one relative, shown under their name in a list.
 function parentWord(p) {
@@ -161,7 +128,9 @@ function renderFirstOpen() {
         kicker("A new tree"),
         h("h2", {}, "Every tree starts with one person"),
         h("p", {}, "Add yourself first. Parents, children and partners branch out from you, one at a time."),
-        h("button", { class: "btn wide", onclick: () => showForm("me") }, "Add yourself"))));
+        h("button", { class: "btn wide", onclick: () => showForm("me") }, "Add yourself"),
+        h("button", { class: "text-btn plain center-btn", onclick: backup.pickFile }, "Import a family file"),
+        h("p", { class: "hint center" }, "Already have a tree on another device? Export it there, then import the .family file here."))));
   store.askToKeepData();
 }
 
@@ -432,6 +401,17 @@ function makeSegment(label, options, picked, onPick, disabledValues = []) {
 
 store.onChange(renderHome);
 renderHome();
+
+document.getElementById("menu-btn").addEventListener("click", backup.showMenu);
+backup.init({
+  // A new tree came in from a file: draw it fresh and centre on "me".
+  onImported: () => {
+    if (panel) panel.hidden = true;
+    chart = null;
+    panelId = null;
+    renderHome();
+  },
+});
 
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("./sw.js").catch(() => {});

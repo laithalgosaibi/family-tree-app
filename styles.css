@@ -499,3 +499,113 @@ body.chart-mode main {
     box-shadow: none;
   }
 }
+
+/* ---- Backups: the ··· button, export, import and the reminder ---- */
+
+.top { position: sticky; }
+.menu-btn {
+  position: absolute;
+  right: 8px;
+  bottom: 4px;
+  min-width: 44px;
+  height: 40px;
+  border: 0;
+  background: none;
+  color: var(--gold);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1;
+}
+.menu-btn:active { color: var(--gold-ink); }
+
+.icon { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.btn.with-icon { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.btn.danger { border-color: var(--danger); color: var(--danger); margin-top: 10px; }
+.btn.danger:not(:disabled):active { background: transparent; opacity: 0.7; }
+
+.center { text-align: center; }
+.center-btn { display: block; margin: 10px auto 0; }
+.hint.center { margin-top: 14px; }
+
+.label-caps { margin: 0 0 4px; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+
+/* The one format, shown picked like the design */
+.format {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.format.picked { border-color: var(--gold); background: var(--gold-soft); }
+.radio-dot {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 3px;
+  border: 1px solid var(--gold);
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--gold) 0 4.5px, transparent 5px);
+}
+.format .row-sub { margin-top: 2px; }
+.ext { font-family: var(--font-body); font-size: 14px; color: var(--muted); font-weight: 400; }
+
+.file-name { margin: 18px 0; padding: 12px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.file-name-text { margin: 0; font-size: 17px; overflow-wrap: anywhere; }
+
+.done, .reminder { padding-top: 4px; }
+.done-title { margin: 0 0 8px; font-family: var(--font-heading); font-weight: 500; font-size: 30px; line-height: 1.15; }
+.done .file-name-text { margin-bottom: 10px; color: var(--muted); }
+
+.file-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  margin-bottom: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.file-card-icon {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--gold);
+  border-radius: var(--radius);
+  color: var(--gold);
+}
+.file-card-name { font-size: 17px; font-weight: 600; overflow-wrap: anywhere; }
+
+.replace-box { margin: 0 0 16px; padding: 14px 16px; border: 1px solid var(--danger); border-radius: var(--radius); }
+.replace-box .kicker { color: var(--danger); }
+.replace-box p { margin: 0; }
+.replace-box .warn { margin-top: 8px; font-size: 15px; color: var(--danger); }
+
+.error.big { font-size: 17px; margin-bottom: 8px; }
+
+/* Mac: the reminder is a bar under the title */
+.reminder-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--gold);
+  background: var(--surface);
+  color: var(--gold);
+}
+.reminder-bar[hidden] { display: none; }
+.bar-text { flex: 1; margin: 0; font-size: 15px; color: var(--ink); }
+.reminder-bar .btn { white-space: nowrap; }
+@media (min-width: 700px) {
+  .first-text .center-btn { margin-left: 0; }
+  .first-text .hint.center { text-align: left; }
+}
+
+/* A ring only when moving with the keyboard, not after a tap */
+button:focus { outline: none; }
+button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
