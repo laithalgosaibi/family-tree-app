@@ -2,6 +2,7 @@
 // The screens of the app. Data lives in store.js.
 
 import * as store from "./store.js";
+import { createChart } from "./chart.js";
 
 const main = document.getElementById("main");
 const sheet = document.getElementById("sheet");
@@ -52,28 +53,98 @@ function childWord(p) {
   return p.gender === "m" ? "Son" : p.gender === "f" ? "Daughter" : "Child";
 }
 
-// ---- Home screen ----
+// ---- Home screen: the family chart ----
+
+let chart = null;
+let panel = null;
+let panelId = null; // the person whose card is open
+const wide = window.matchMedia("(min-width: 700px)");
 
 function renderHome() {
   const me = store.getMe();
-  if (!me) return renderFirstOpen();
-
-  const others = store.allPeople().filter((p) => p.id !== me.id).sort(byName);
-
-  main.replaceChildren(
-    h("p", { class: "note" },
-      "The family chart comes in the next step. For now, everyone you add is listed here. Tap a person to add their parents, spouses and children."),
-    h("h2", { class: "section-title" }, "You"),
-    h("ul", { class: "rows" }, personRow(me, store.parentsLabel(me))),
-    h("h2", { class: "section-title" }, `Family · ${others.length}`),
-    others.length
-      ? h("ul", { class: "rows" }, others.map((p) => personRow(p, store.parentsLabel(p))))
-      : h("p", { class: "empty" }, "No one yet. Tap your name above to add your parents."));
+  if (!me) {
+    chart = null;
+    panelId = null;
+    document.body.classList.remove("chart-mode");
+    return renderFirstOpen();
+  }
+  if (!chart) return buildChart();
+  chart.update(store.getData(), { keep: panelId || me.id });
+  if (panelId) showPerson(panelId, { move: false });
 }
+
+function buildChart() {
+  document.body.classList.add("chart-mode");
+  const area = h("div", { class: "chart", tabindex: "0", "aria-label": "Family chart" });
+  panel = h("aside", { class: "panel", hidden: true, "aria-label": "Person" });
+
+  const zoomText = h("span", { class: "zoom-text", "aria-live": "polite" }, "100%");
+  const controls = h("div", { class: "chart-controls" },
+    h("div", { class: "zoom-group" },
+      h("button", { class: "ctrl zoom-out", "aria-label": "Zoom out", onclick: () => chart.zoomBy(1 / 1.25) }, "−"),
+      zoomText,
+      h("button", { class: "ctrl zoom-in", "aria-label": "Zoom in", onclick: () => chart.zoomBy(1.25) }, "+")),
+    h("button", { class: "ctrl centre", "aria-label": "Centre on me", onclick: () => chart.centreOn(store.getMe().id) },
+      targetIcon(), h("span", { class: "centre-text" }, "Centre on me")));
+  const hint = h("p", { class: "chart-hint" }, "Drag to move · pinch or ⌘-scroll to zoom");
+
+  main.replaceChildren(area, controls, hint, panel);
+
+  chart = createChart(area, {
+    onSelect: (id) => showPerson(id),
+    onEmpty: closePanel,
+    insets: () => panel.hidden ? { right: 0, bottom: 0 }
+      : wide.matches ? { right: panel.offsetWidth, bottom: 0 } : { right: 0, bottom: panel.offsetHeight },
+  });
+  chart.onZoom((s) => (zoomText.textContent = Math.round(s * 100) + "%"));
+  chart.update(store.getData());
+  chart.setScale(wide.matches ? 0.9 : 0.75);
+  chart.centreOn(store.getMe().id, { animate: false });
+
+  // The panel covers part of the chart, so the controls move out of its way.
+  new ResizeObserver(() => {
+    main.style.setProperty("--panel-h", panel.hidden ? "0px" : panel.offsetHeight + "px");
+    main.style.setProperty("--panel-w", panel.hidden ? "0px" : panel.offsetWidth + "px");
+  }).observe(panel);
+}
+
+function targetIcon() {
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", "0 0 20 20");
+  svg.setAttribute("class", "target");
+  svg.setAttribute("aria-hidden", "true");
+  svg.innerHTML = '<circle cx="10" cy="10" r="5.5"/><circle cx="10" cy="10" r="1.6" class="dot"/>'
+    + '<path d="M10 1.5v3M10 15.5v3M1.5 10h3M15.5 10h3"/>';
+  return svg;
+}
+
+function closePanel() {
+  if (!panel || panel.hidden) return;
+  panel.hidden = true;
+  panelId = null;
+  main.style.setProperty("--panel-h", "0px");
+  main.style.setProperty("--panel-w", "0px");
+  chart.select(null);
+}
+
+// Keys on a Mac: Escape closes the card, + and − zoom, arrows move.
+document.addEventListener("keydown", (e) => {
+  if (!chart || sheet.open || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.target.closest("input, textarea")) return;
+  const step = 80;
+  const keys = {
+    Escape: () => closePanel(),
+    "+": () => chart.zoomBy(1.25), "=": () => chart.zoomBy(1.25), "-": () => chart.zoomBy(1 / 1.25),
+    ArrowLeft: () => chart.panBy(step, 0), ArrowRight: () => chart.panBy(-step, 0),
+    ArrowUp: () => chart.panBy(0, step), ArrowDown: () => chart.panBy(0, -step),
+  };
+  if (keys[e.key]) { e.preventDefault(); keys[e.key](); }
+});
 
 function personRow(p, sub) {
   return h("li", {},
-    h("button", { class: "row", onclick: () => showPerson(p.id) },
+    h("button", { class: "row", onclick: () => showPerson(p.id, { centre: true }) },
       h("span", { class: "row-text" },
         h("span", { class: "row-name" }, store.fullName(p)),
         sub && h("span", { class: "row-sub" }, sub)),
@@ -96,9 +167,11 @@ function renderFirstOpen() {
 
 // ---- A person's card ----
 
-function showPerson(id) {
+// Opens the card for a person beside the chart (Mac) or under it (phone).
+// centre: move the chart so they are in the middle. move: false leaves the chart still.
+function showPerson(id, { centre = false, move = true } = {}) {
   const p = store.getPerson(id);
-  if (!p) return closeSheet();
+  if (!p) return closePanel();
   const isMe = p.id === store.getMe()?.id;
   const parents = store.parentsOf(id);
   const spouses = store.spousesOf(id);
@@ -111,10 +184,14 @@ function showPerson(id) {
         ? h("ul", { class: "rows plain" }, list.map((x) => personRow(x, word(x))))
         : h("p", { class: "empty" }, `No ${title.toLowerCase()} added yet.`));
 
-  openSheet(h("div", {},
+  const samePerson = !panel.hidden && panelId === id;
+  panelId = id;
+  panel.hidden = false;
+  panel.replaceChildren(...[
+    h("div", { class: "grabber", "aria-hidden": "true" }),
     h("div", { class: "card-top" },
       h("span", {}),
-      h("button", { class: "icon-btn", "aria-label": "Close", onclick: closeSheet }, "×")),
+      h("button", { class: "icon-btn", "aria-label": "Close", onclick: closePanel }, "×")),
     isMe && kicker("You"),
     h("h2", { class: "person-name" }, store.fullName(p)),
     parents.length > 0 && h("p", { class: "person-parents" }, store.parentsLabel(p, { full: true })),
@@ -128,7 +205,13 @@ function showPerson(id) {
     parents.length >= 2 && h("p", { class: "hint" }, "Both parents are added."),
     group("Parents", parents, parentWord),
     group(spouses.length > 1 ? "Spouses" : "Spouse", spouses, (s) => store.spouseWord(id, s.id)),
-    group("Children", children, (c) => store.parentsLabel(c) || childWord(c))));
+    group("Children", children, (c) => store.parentsLabel(c) || childWord(c)),
+  ].filter(Boolean));
+  if (!samePerson) panel.scrollTop = 0;
+  main.style.setProperty("--panel-h", panel.offsetHeight + "px");
+  main.style.setProperty("--panel-w", panel.offsetWidth + "px");
+  chart.select(id);
+  if (move) chart.centreOn(id, { onlyIfHidden: !centre });
 }
 
 // ---- One form for every new person ----
@@ -296,8 +379,8 @@ function showForm(kind, anchorId) {
           if (otherParent && !store.checkParentLink(otherParent, id)) store.linkParent(otherParent, id);
         } else store.linkSpouse(anchor.id, id, former);
       });
-      if (kind === "me") closeSheet();
-      else showPerson(anchor.id);
+      closeSheet();
+      if (kind !== "me") showPerson(anchor.id, { move: false });
     } catch (err) {
       error.textContent = err.message;
     }
@@ -316,7 +399,7 @@ function showForm(kind, anchorId) {
 
   openSheet(h("div", {},
     h("div", { class: "form-bar" },
-      h("button", { type: "button", class: "text-btn plain", onclick: () => (anchor ? showPerson(anchor.id) : closeSheet()) }, "Cancel"),
+      h("button", { type: "button", class: "text-btn plain", onclick: closeSheet }, "Cancel"),
       h("h2", { class: "form-title" }, titles[kind]),
       saveBtn),
     kicker(context[0]),
