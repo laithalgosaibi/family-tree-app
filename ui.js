@@ -45,3 +45,46 @@ export function icon(paths, cls = "icon") {
   svg.innerHTML = paths;
   return svg;
 }
+
+// A row of two buttons where one is picked, like Son | Daughter.
+export function makeSegment(label, options, picked, onPick, disabledValues = []) {
+  const buttons = options.map(([value, text]) =>
+    h("button", {
+      type: "button",
+      class: "seg",
+      "aria-pressed": String(value === picked),
+      disabled: disabledValues.includes(value),
+      onclick: () => {
+        buttons.forEach((b) => b.setAttribute("aria-pressed", String(b === buttons[options.findIndex(([v]) => v === value)])));
+        onPick(value);
+      },
+    }, text));
+  return h("div", { class: "field" },
+    h("span", { class: "field-label" }, label),
+    h("div", { class: "segment" }, buttons));
+}
+
+// ---- A small "are you sure?" card in the middle of the screen ----
+// It sits on top of everything, even an open sheet.
+
+const confirmBox = document.getElementById("confirm");
+confirmBox.addEventListener("click", (e) => {
+  if (e.target === confirmBox) confirmBox.close(); // tap outside: same as Keep
+});
+
+export const trashIcon = (cls) => icon('<path d="M4 5.5h12M8 5.5V4h4v1.5M5.5 5.5l.8 11h7.4l.8-11M8.5 8.5v5.5M11.5 8.5v5.5"/>', cls);
+
+// content: what to show. yes: the words on the red button. onYes: what it does.
+export function askToConfirm({ title, body, yes, keep = "Keep", onYes }) {
+  const yesBtn = h("button", { class: "btn small danger-btn with-icon", onclick: () => { confirmBox.close(); onYes(); } },
+    trashIcon(), yes);
+  confirmBox.replaceChildren(
+    h("div", { class: "confirm-icon" }, trashIcon("icon big")),
+    h("h2", { class: "confirm-title" }, title),
+    ...body.filter(Boolean).map((t) => (typeof t === "string" ? h("p", {}, t) : t)),
+    h("div", { class: "confirm-actions" },
+      h("button", { class: "btn small keep-btn", onclick: () => confirmBox.close() }, keep),
+      yesBtn));
+  confirmBox.showModal();
+  yesBtn.blur();
+}

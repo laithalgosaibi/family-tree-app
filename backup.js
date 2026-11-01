@@ -7,6 +7,7 @@
 
 import * as store from "./store.js";
 import { h, kicker, openSheet, closeSheet, sheet, icon } from "./ui.js";
+import { undoLast } from "./undo.js";
 
 const DAY = 24 * 60 * 60 * 1000;
 const touch = window.matchMedia("(hover: none) and (pointer: coarse)");
@@ -62,6 +63,7 @@ function lastBackupText() {
 
 export function showMenu() {
   const hasTree = !!store.getMe();
+  const last = store.lastChange();
   const item = (title, sub, onclick, disabled) =>
     h("li", {},
       h("button", { class: "row", onclick, disabled },
@@ -72,8 +74,12 @@ export function showMenu() {
   openSheet(h("div", {},
     h("div", { class: "form-bar" },
       h("button", { type: "button", class: "text-btn plain", onclick: closeSheet }, "Close"),
-      h("h2", { class: "form-title" }, "Backups"),
+      h("h2", { class: "form-title" }, "Menu"),
       h("span", {})),
+    h("ul", { class: "rows menu-undo" },
+      item("Undo last change", last ? last.message : "Nothing to undo yet",
+        () => { closeSheet(); undoLast(); }, !last)),
+    h("p", { class: "label-caps menu-caps" }, "Backups"),
     hasTree && h("p", { class: "context" }, lastBackupText()),
     h("ul", { class: "rows" },
       item("Export a backup", "Save the whole tree to a file", showExport, !hasTree),
