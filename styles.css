@@ -389,6 +389,72 @@ body.chart-mode main {
 }
 @media (hover: hover) { .box:hover { border-color: var(--gold); } }
 
+/* Collapse and expand: the small − under anyone with children, and +N on a folded branch */
+.box.folded {
+  /* Two thin cards peeking out underneath: a small stack */
+  box-shadow:
+    0 4px 0 -2px var(--bg), 0 4px 0 -1px var(--line),
+    0 8px 0 -4px var(--bg), 0 8px 0 -3px var(--line);
+}
+.box.folded.selected {
+  box-shadow:
+    0 4px 0 -2px var(--bg), 0 4px 0 -1px var(--line),
+    0 8px 0 -4px var(--bg), 0 8px 0 -3px var(--line),
+    0 2px 10px rgba(176, 125, 43, 0.22);
+}
+.fold {
+  position: absolute;
+  z-index: 1;
+  transform: translate(-50%, -50%);
+  min-width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--bg);
+  color: var(--faint);
+  font-size: 12px;
+  line-height: 16px;
+  text-align: center;
+}
+/* A bigger invisible area around it, so it is easy to hit with a finger */
+.fold::before { content: ""; position: absolute; inset: -12px -14px; }
+.fold.open-btn {
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 10px;
+  border-color: var(--gold);
+  color: var(--gold-ink);
+  font-size: 11px;
+  line-height: 18px;
+  white-space: nowrap;
+  margin-top: 4px;
+}
+@media (hover: hover) {
+  .fold:hover { border-color: var(--gold); color: var(--gold-ink); }
+  .fold.open-btn:hover { background: var(--gold-soft); }
+}
+
+/* "1 branch collapsed · Expand all" at the top left of the chart */
+.fold-note {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 8px 6px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 14px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+.fold-note[hidden] { display: none; }
+.fold-note .text-btn { padding: 4px 6px; font-size: 14px; }
+@media (min-width: 700px) { .fold-note { top: 16px; left: 20px; } }
+
 /* Zoom and centre buttons: a column on the right on phone, a bar at the bottom left on Mac */
 .chart-controls {
   position: absolute;
