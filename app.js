@@ -7,6 +7,7 @@ import { h, kicker, openSheet, closeSheet, sheet, makeSegment } from "./ui.js";
 import * as backup from "./backup.js";
 import * as edit from "./edit.js";
 import * as undo from "./undo.js";
+import * as fold from "./fold.js";
 
 const main = document.getElementById("main");
 
@@ -27,6 +28,7 @@ function childWord(p) {
 let chart = null;
 let panel = null;
 let panelId = null; // the person whose card is open
+let foldNote = null; // "2 branches collapsed · Expand all" at the top of the chart
 const wide = window.matchMedia("(min-width: 700px)");
 
 function renderHome() {
@@ -38,8 +40,49 @@ function renderHome() {
     return renderFirstOpen();
   }
   if (!chart) return buildChart();
-  chart.update(store.getData(), { keep: panelId || me.id });
-  if (panelId) showPerson(panelId, { move: false });
+  redraw(panelId || me.id);
+  if (panelId && chart.has(panelId)) showPerson(panelId, { move: false });
+  else if (panelId) closePanel();
+}
+
+// Draw the chart again, keeping one person still on screen.
+function redraw(keep) {
+  chart.update(store.getData(), { keep });
+  drawFoldNote();
+}
+
+function drawFoldNote() {
+  const count = fold.view(store.getData()).branches.size;
+  foldNote.hidden = count === 0;
+  foldNote.replaceChildren(
+    h("span", {}, `${count} ${count === 1 ? "branch" : "branches"} collapsed`),
+    h("button", { class: "text-btn", onclick: expandAll }, "Expand all"));
+}
+
+function expandAll() {
+  fold.expandAll();
+  redraw(panelId || store.getMe().id);
+}
+
+// Fold or open the branch under a person. They stay in the same spot on screen.
+function toggleFold(id) {
+  fold.toggle(id);
+  redraw(id);
+  if (panelId && !chart.has(panelId)) closePanel();
+}
+
+// Make sure a person is showing on the chart, opening any folded branch they are in.
+function revealPerson(id) {
+  const data = store.getData();
+  const keep = fold.shownFoldFor(data, id); // the folded person they are under, on screen now
+  if (!fold.reveal(data, id)) return;
+  redraw(keep || id);
+}
+
+function centreOnMe() {
+  const me = store.getMe();
+  revealPerson(me.id);
+  chart.centreOn(me.id);
 }
 
 function buildChart() {
@@ -53,22 +96,28 @@ function buildChart() {
       h("button", { class: "ctrl zoom-out", "aria-label": "Zoom out", onclick: () => chart.zoomBy(1 / 1.25) }, "−"),
       zoomText,
       h("button", { class: "ctrl zoom-in", "aria-label": "Zoom in", onclick: () => chart.zoomBy(1.25) }, "+")),
-    h("button", { class: "ctrl centre", "aria-label": "Centre on me", onclick: () => chart.centreOn(store.getMe().id) },
+    h("button", { class: "ctrl centre", "aria-label": "Centre on me", onclick: centreOnMe },
       targetIcon(), h("span", { class: "centre-text" }, "Centre on me")));
   const hint = h("p", { class: "chart-hint" }, "Drag to move · pinch or ⌘-scroll to zoom");
 
-  main.replaceChildren(area, controls, hint, panel);
+  foldNote = h("div", { class: "fold-note", role: "status", hidden: true });
+
+  main.replaceChildren(area, foldNote, controls, hint, panel);
 
   chart = createChart(area, {
     onSelect: (id) => showPerson(id),
     onEmpty: closePanel,
+    onFold: toggleFold,
     insets: () => panel.hidden ? { right: 0, bottom: 0 }
       : wide.matches ? { right: panel.offsetWidth, bottom: 0 } : { right: 0, bottom: panel.offsetHeight },
   });
   chart.onZoom((s) => (zoomText.textContent = Math.round(s * 100) + "%"));
   chart.update(store.getData());
+  drawFoldNote();
   chart.setScale(wide.matches ? 0.9 : 0.75);
-  chart.centreOn(store.getMe().id, { animate: false });
+  // If you are inside a folded branch, start on the person it is folded under.
+  const meId = store.getMe().id;
+  chart.centreOn(fold.shownFoldFor(store.getData(), meId) || meId, { animate: false });
 
   // The panel covers part of the chart, so the controls move out of its way.
   new ResizeObserver(() => {
@@ -143,6 +192,7 @@ function renderFirstOpen() {
 function showPerson(id, { centre = false, move = true } = {}) {
   const p = store.getPerson(id);
   if (!p) return closePanel();
+  if (!chart.has(id)) { revealPerson(id); centre = true; }
   const isMe = p.id === store.getMe()?.id;
   const parents = store.parentsOf(id);
   const spouses = store.spousesOf(id);
@@ -339,7 +389,7 @@ function showForm(kind, anchorId) {
   function save(existingId) {
     error.textContent = "";
     try {
-      store.change(() => {
+      const newId = store.change(() => {
         const id = existingId || store.addPerson(values()).id;
         if (kind === "me") store.setMe(id);
         else if (kind === "parent") {
@@ -357,7 +407,11 @@ function showForm(kind, anchorId) {
         return { message: `${name} was added.` };
       });
       closeSheet();
-      if (kind !== "me") showPerson(anchor.id, { move: false });
+      if (kind !== "me") {
+        // Someone added inside a folded branch: open it, so they show.
+        if (chart && newId && !chart.has(newId)) revealPerson(newId);
+        showPerson(anchor.id, { move: false });
+      }
     } catch (err) {
       error.textContent = err.message;
     }
@@ -398,6 +452,7 @@ backup.init({
   // A new tree came in from a file: draw it fresh and centre on "me".
   onImported: () => {
     if (panel) panel.hidden = true;
+    fold.expandAll();
     chart = null;
     panelId = null;
     renderHome();

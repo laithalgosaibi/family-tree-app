@@ -4,6 +4,7 @@
 // Where things go is worked out in layout.js.
 
 import { layoutTree, pathBetween, BOX_W, BOX_H } from "./layout.js";
+import * as fold from "./fold.js";
 
 const MIN_SCALE = 0.25;
 const MAX_SCALE = 2;
@@ -13,8 +14,9 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
 // container: the element the chart fills.
 // options.onSelect(id): a box was tapped. options.onEmpty(): empty space was tapped.
+// options.onFold(id): the − or +N button under a box was tapped.
 // options.insets(): how much of the chart is covered by the person panel { right, bottom }.
-export function createChart(container, { onSelect, onEmpty, insets }) {
+export function createChart(container, { onSelect, onEmpty, onFold, insets }) {
   const world = document.createElement("div");
   world.className = "chart-world";
   const svg = document.createElementNS(SVG_NS, "svg");
@@ -84,7 +86,9 @@ export function createChart(container, { onSelect, onEmpty, insets }) {
   // ---- Drawing ----
 
   function draw() {
-    layout = layoutTree(data);
+    // Folded branches are left out before working out positions.
+    const shown = fold.view(data);
+    layout = layoutTree(shown.data);
     const pad = 40;
     svg.setAttribute("width", layout.width + pad * 2);
     svg.setAttribute("height", layout.height + pad * 2);
@@ -122,6 +126,8 @@ export function createChart(container, { onSelect, onEmpty, insets }) {
       if (n.id === meId) box.classList.add("me");
       if (onPath.has(n.id)) box.classList.add("on-path");
       if (n.id === selectedId) box.classList.add("selected");
+      const branch = shown.branches.get(n.id);
+      if (branch) box.classList.add("folded");
       box.dataset.id = n.id;
       box.style.left = n.x + "px";
       box.style.top = n.y + "px";
@@ -143,6 +149,27 @@ export function createChart(container, { onSelect, onEmpty, insets }) {
         box.append(tag);
       }
       els.push(box);
+
+      // The small button under anyone with children: − folds them away, +N opens them again.
+      if (branch || shown.canFold.has(n.id)) {
+        const name = p.first;
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = branch ? "fold open-btn" : "fold";
+        btn.dataset.fold = n.id;
+        btn.style.left = n.x + BOX_W / 2 + "px";
+        btn.style.top = n.y + BOX_H + "px";
+        if (branch) {
+          btn.classList.toggle("has-me", branch.hasMe);
+          btn.textContent = "+" + branch.count + (branch.hasMe ? " · you" : "");
+          btn.setAttribute("aria-label", `Open ${name}’s branch, ${branch.count} ${branch.count === 1 ? "person" : "people"}`
+            + (branch.hasMe ? ", including you" : ""));
+        } else {
+          btn.textContent = "−";
+          btn.setAttribute("aria-label", `Fold away ${name}’s branch`);
+        }
+        els.push(btn);
+      }
     }
     boxes.replaceChildren(...els);
   }
@@ -267,8 +294,10 @@ export function createChart(container, { onSelect, onEmpty, insets }) {
       e.preventDefault();
       return;
     }
+    const foldBtn = e.target.closest(".fold");
     const box = e.target.closest(".box");
-    if (box) onSelect(box.dataset.id);
+    if (foldBtn) { e.stopPropagation(); onFold?.(foldBtn.dataset.fold); }
+    else if (box) onSelect(box.dataset.id);
     else if (!e.target.closest(".chart-controls")) onEmpty();
   }, true);
 
@@ -321,6 +350,7 @@ export function createChart(container, { onSelect, onEmpty, insets }) {
       draw();
     },
     centreOn,
+    has(id) { return !!layout?.nodes.has(id); },
     zoomBy,
     setScale(s) { scale = clamp(s, MIN_SCALE, MAX_SCALE); apply(); },
     panBy(dx, dy) { tx += dx; ty += dy; apply({ animate: true }); },
