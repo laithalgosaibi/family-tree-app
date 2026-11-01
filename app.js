@@ -9,6 +9,7 @@ import * as edit from "./edit.js";
 import * as undo from "./undo.js";
 import * as fold from "./fold.js";
 import { relationship, pathWithWords } from "./kin.js";
+import * as search from "./search.js";
 
 const main = document.getElementById("main");
 
@@ -552,6 +553,10 @@ store.onChange(renderHome);
 renderHome();
 
 document.getElementById("menu-btn").addEventListener("click", backup.showMenu);
+// Search: the person picked opens on the chart, even inside a folded branch.
+search.init((id) => {
+  if (chart) showPerson(id, { centre: true });
+});
 undo.init();
 backup.init({
   // A new tree came in from a file: draw it fresh and centre on "me".
