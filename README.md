@@ -20,6 +20,7 @@ Plain web files, no build step, so any change is live as soon as it is saved:
 - `kin.js` works out how two people are related, in words ("your first cousin once removed")
 - `find.js` search by name: who matches what is typed, other spellings, and telling apart people with the same name
 - `search.js` the search box and its results
+- `finder.js` the relationship finder: pick any two people and see how they are related
 - `sw.js` lets the app open without internet
 
 Everything is saved in the browser on the device being used. Nothing is sent anywhere.
@@ -27,6 +28,7 @@ To move the tree between devices, or keep a safe copy, use the ··· button: Ex
 The ··· button also has Undo last change. Undo remembers the last 30 changes while the app is open.
 Tap anyone to see how they are related to you, which side of the family they are on, and every step between you.
 Search by name with the magnifying glass on a phone, or the box at the top left on a Mac (⌘F). Other spellings match too, so Yusuf finds Yousef. When two people share a name, both sets of parents are shown so you can tell them apart.
+The relationship finder shows how any two people are related, both ways round, with the shared ancestors and every step between them. On a Mac it is the button at the top right (click a box to set To, ⌥-click to set From). On a phone it is in the ··· menu.
 The small − under anyone with children folds away everyone below them. Tap +N to open it again, or Expand all at the top.
 
 ## Try it on a computer
@@ -42,5 +44,5 @@ From this folder run `python3 -m http.server` and open http://localhost:8000
 5. Collapse and expand branches (done)
 6. Relationship to me in words (done)
 7. Search by name (done)
-8. Relationship finder for any two people
+8. Relationship finder for any two people (done)
 9. Separate branches and linking them later
