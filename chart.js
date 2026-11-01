@@ -3,7 +3,8 @@
 // drag to move, pinch or Cmd/Ctrl-scroll to zoom, and the + / − / centre buttons.
 // Where things go is worked out in layout.js.
 
-import { layoutTree, pathBetween, BOX_W, BOX_H } from "./layout.js";
+import { layoutTree, BOX_W, BOX_H } from "./layout.js";
+import { pathTo } from "./kin.js";
 import * as fold from "./fold.js";
 
 const MIN_SCALE = 0.25;
@@ -97,7 +98,7 @@ export function createChart(container, { onSelect, onEmpty, onFold, insets }) {
     svg.setAttribute("viewBox", `${-pad} ${-pad} ${layout.width + pad * 2} ${layout.height + pad * 2}`);
 
     // The chain of people between you and the person tapped is drawn in gold.
-    const path = selectedId ? pathBetween(data, meId, selectedId) : [];
+    const path = selectedId ? pathTo(data, meId, selectedId) : [];
     const onPath = new Set(path);
     const linked = (a, b) => path.some((id, i) => (id === a && path[i + 1] === b) || (id === b && path[i + 1] === a));
 

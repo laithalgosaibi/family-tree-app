@@ -17,11 +17,13 @@ Plain web files, no build step, so any change is live as soon as it is saved:
 - `edit.js` fixing mistakes: edit a name, unlink relatives, delete a person
 - `undo.js` the message after every change with its Undo button (and ⌘Z on the Mac)
 - `fold.js` collapse and expand branches: which people are folded away on the chart
+- `kin.js` works out how two people are related, in words ("your first cousin once removed")
 - `sw.js` lets the app open without internet
 
 Everything is saved in the browser on the device being used. Nothing is sent anywhere.
 To move the tree between devices, or keep a safe copy, use the ··· button: Export a backup, then Import a file on the other device.
 The ··· button also has Undo last change. Undo remembers the last 30 changes while the app is open.
+Tap anyone to see how they are related to you, which side of the family they are on, and every step between you.
 The small − under anyone with children folds away everyone below them. Tap +N to open it again, or Expand all at the top.
 
 ## Try it on a computer
@@ -35,7 +37,7 @@ From this folder run `python3 -m http.server` and open http://localhost:8000
 3. Export and import a file, plus backup reminder (done)
 4. Fix mistakes: edit, delete, change links, undo (done)
 5. Collapse and expand branches (done)
-6. Relationship to me in words
+6. Relationship to me in words (done)
 7. Search by name
 8. Relationship finder for any two people
 9. Separate branches and linking them later

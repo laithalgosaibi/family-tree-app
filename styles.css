@@ -250,6 +250,56 @@ dialog#sheet::backdrop { background: rgba(20, 18, 15, 0.35); }
 
 .group { margin-top: 20px; padding-top: 4px; border-top: 1px solid var(--line); }
 
+/* How someone is related to you */
+.person-side { margin: 4px 0 0; color: var(--muted); font-style: italic; }
+.row-rel { font-size: 14px; color: var(--gold-ink); }
+.chain { list-style: none; margin: 0; padding: 0; }
+.chain-step { position: relative; }
+/* The gold line joining one step to the next */
+.chain-step:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 30px;
+  bottom: -10px;
+  width: 2px;
+  background: var(--gold);
+}
+.chain-btn {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  width: 100%;
+  padding: 6px 0;
+  border: 0;
+  background: none;
+  text-align: left;
+}
+.chain-btn:active { background: var(--gold-soft); }
+@media (hover: hover) { .chain-btn:hover { background: var(--gold-soft); } }
+.chain-dot {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  margin-top: 7px;
+  border: 1.5px solid var(--gold);
+  border-radius: 50%;
+  background: var(--surface);
+}
+.chain-step.end .chain-dot { background: var(--gold); }
+.chain-name { font-size: 17px; line-height: 1.3; overflow-wrap: anywhere; }
+.tag {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 0 8px;
+  border-radius: var(--radius);
+  background: var(--gold-soft);
+  color: var(--gold-ink);
+  font-size: 13px;
+}
+.relate { padding-top: 14px; border-top: 1px solid var(--line); }
+.relate-words { margin: 0; font-family: var(--font-heading); font-size: 22px; font-weight: 500; line-height: 1.2; }
+
 /* Add form */
 .form-bar { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; margin-bottom: 16px; }
 .form-bar .btn { white-space: nowrap; }

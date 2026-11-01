@@ -8,6 +8,7 @@ import * as backup from "./backup.js";
 import * as edit from "./edit.js";
 import * as undo from "./undo.js";
 import * as fold from "./fold.js";
+import { relationship, pathWithWords } from "./kin.js";
 
 const main = document.getElementById("main");
 
@@ -21,6 +22,66 @@ function parentWord(p) {
 }
 function childWord(p) {
   return p.gender === "m" ? "Son" : p.gender === "f" ? "Daughter" : "Child";
+}
+
+// ---- How someone is related to you, in words ----
+
+const cap = (text) => text.charAt(0).toUpperCase() + text.slice(1);
+
+// What `id` is to you, worked out from the links. `data` can be a tree that is not saved yet.
+function relToMe(id, data = store.getData()) {
+  return relationship(data, data.meId, id);
+}
+
+// "Your first cousin once removed", "You", or null when they are not linked to you.
+function relLabel(id) {
+  const rel = relToMe(id);
+  if (rel.kind === "self") return "You";
+  return rel.kind === "none" ? null : "Your " + rel.words;
+}
+
+// Which side of the family: "On your father's side", "Through your wife, Sara".
+function sideText(via, data = store.getData()) {
+  if (!via) return "";
+  if (via === "both") return "On both your father’s and mother’s sides";
+  if (via.spouse) {
+    const s = data.people[via.spouse];
+    if (!s) return "";
+    const link = data.spouses.find((l) => (l.a === data.meId && l.b === s.id) || (l.b === data.meId && l.a === s.id));
+    const word = (link?.former ? "former " : "") + (s.gender === "m" ? "husband" : s.gender === "f" ? "wife" : "spouse");
+    return `Through your ${word}, ${s.first}`;
+  }
+  const p = data.people[via];
+  if (!p) return "";
+  return p.gender === "m" ? "On your father’s side" : p.gender === "f" ? "On your mother’s side" : `Through your parent ${p.first}`;
+}
+
+// The other ways someone is related to you, when your parents are related to each other.
+function alsoText(rel) {
+  return rel.also.map((o) => {
+    const side = sideText(o.via);
+    return `Also your ${o.words}` + (side ? ", " + side.charAt(0).toLowerCase() + side.slice(1) : "");
+  });
+}
+
+// "How you're connected": every step from you to them, each with what they are to you.
+function connectionSection(rel) {
+  const steps = pathWithWords(store.getData(), store.getMe().id, rel.path);
+  const common = new Set(rel.common);
+  return h("section", { class: "group" },
+    h("h3", { class: "group-title" }, "How you’re connected"),
+    h("ol", { class: "chain plain" }, steps.map((step, i) => {
+      const p = store.getPerson(step.id);
+      const end = i === 0 || i === steps.length - 1;
+      return h("li", { class: "chain-step" + (end ? " end" : "") },
+        h("button", { class: "chain-btn", onclick: () => showPerson(step.id, { centre: true }) },
+          h("span", { class: "chain-dot", "aria-hidden": "true" }),
+          h("span", { class: "row-text" },
+            h("span", { class: "chain-name" }, store.fullName(p)),
+            h("span", { class: "row-sub" },
+              i === 0 ? "You" : cap(step.words),
+              common.has(step.id) && h("span", { class: "tag" }, "Common ancestor")))));
+    })));
 }
 
 // ---- Home screen: the family chart ----
@@ -161,10 +222,12 @@ document.addEventListener("keydown", (e) => {
 });
 
 function personRow(p, sub) {
+  const rel = relLabel(p.id);
   return h("li", {},
     h("button", { class: "row", onclick: () => showPerson(p.id, { centre: true }) },
       h("span", { class: "row-text" },
         h("span", { class: "row-name" }, store.fullName(p)),
+        rel && h("span", { class: "row-rel" }, rel),
         sub && h("span", { class: "row-sub" }, sub)),
       h("span", { class: "chevron", "aria-hidden": "true" }, "›")));
 }
@@ -197,6 +260,8 @@ function showPerson(id, { centre = false, move = true } = {}) {
   const parents = store.parentsOf(id);
   const spouses = store.spousesOf(id);
   const children = store.childrenOf(id).sort(byName);
+  const rel = relToMe(id);
+  const side = sideText(rel.via);
 
   const group = (title, list, word) =>
     h("section", { class: "group" },
@@ -213,9 +278,11 @@ function showPerson(id, { centre = false, move = true } = {}) {
     h("div", { class: "card-top" },
       h("button", { class: "text-btn", onclick: () => edit.showEdit(id) }, "Edit"),
       h("button", { class: "icon-btn", "aria-label": "Close", onclick: closePanel }, "×")),
-    isMe && kicker("You"),
+    kicker(isMe ? "You" : rel.kind === "none" ? "Not linked to you yet" : "Your " + rel.words),
     h("h2", { class: "person-name" }, store.fullName(p)),
     parents.length > 0 && h("p", { class: "person-parents" }, store.parentsLabel(p, { full: true })),
+    side && h("p", { class: "person-side" }, side),
+    ...alsoText(rel).map((t) => h("p", { class: "person-side" }, t)),
     h("div", { class: "actions" },
       h("button", { class: "action", disabled: parents.length >= 2, onclick: () => showForm("parent", id) },
         h("span", { class: "action-icon", "aria-hidden": "true" }, "↑"), "Add parent"),
@@ -224,6 +291,10 @@ function showPerson(id, { centre = false, move = true } = {}) {
       h("button", { class: "action", onclick: () => showForm("spouse", id) },
         h("span", { class: "action-icon", "aria-hidden": "true" }, "↔"), "Add spouse")),
     parents.length >= 2 && h("p", { class: "hint" }, "Both parents are added."),
+    !isMe && rel.path.length > 1 && connectionSection(rel),
+    rel.kind === "none" && h("section", { class: "group" },
+      h("h3", { class: "group-title" }, "How you’re connected"),
+      h("p", { class: "empty" }, "There is no line between you and them in the tree yet. Link them to a relative of yours to see how you are related.")),
     group("Parents", parents, parentWord),
     group(spouses.length > 1 ? "Spouses" : "Spouse", spouses, (s) => store.spouseWord(id, s.id)),
     group("Children", children, (c) => store.parentsLabel(c) || childWord(c)),
@@ -296,7 +367,7 @@ function showForm(kind, anchorId) {
         h("span", { class: "field-label" }, "Other parent"),
         h("div", { class: "choices", role: "radiogroup" }, options.map(([value, label, sub]) => {
           const input = h("input", { type: "radio", name: "other-parent", value, checked: value === (otherParent || "") });
-          input.addEventListener("change", () => { otherParent = value || null; suggest(); });
+          input.addEventListener("change", () => { otherParent = value || null; suggest(); update(); });
           return h("label", { class: "choice" }, input,
             h("span", { class: "row-text" }, h("span", { class: "row-name" }, label), h("span", { class: "row-sub" }, sub)));
         })));
@@ -308,6 +379,7 @@ function showForm(kind, anchorId) {
   let marryEl = null;
   if (kind === "parent" && parents.length === 1) {
     marry = h("input", { type: "checkbox", checked: true });
+    marry.addEventListener("change", () => update());
     marryEl = h("label", { class: "choice single" }, marry,
       h("span", { class: "row-text" },
         h("span", { class: "row-name" }, `Married to ${store.fullName(parents[0])}`),
@@ -331,7 +403,7 @@ function showForm(kind, anchorId) {
     const match = store.findMatches(values()).find((m) => m.id !== anchor.id && !dismissed.has(m.id));
     if (!match) return (dupBox.hidden = true);
     const problem = linkProblem(match);
-    const desc = [store.parentsLabel(match), problem].filter(Boolean).join(" · ");
+    const desc = [store.parentsLabel(match), relLabel(match.id), problem].filter(Boolean).join(" · ");
     dupBox.hidden = false;
     dupBox.replaceChildren(
       kicker("Already in the tree"),
@@ -364,6 +436,37 @@ function showForm(kind, anchorId) {
     }
   }
 
+  // ---- How they will relate to you, before saving ----
+  const relWords = h("p", { class: "relate-words" });
+  const relSide = h("p", { class: "person-side" });
+  const relateBox = kind === "me" ? null
+    : h("div", { class: "relate" }, kicker("How they’ll relate to you"), relWords, relSide);
+
+  function drawRelate() {
+    if (!relateBox) return;
+    // A copy of the tree with the new person in it, linked the way Save would link them.
+    const data = store.getData();
+    const id = "new-person";
+    const d = {
+      ...data,
+      people: { ...data.people, [id]: { id, first: first.input.value.trim(), father: "", family: "", gender } },
+      parents: [...data.parents],
+      spouses: [...data.spouses],
+    };
+    if (kind === "parent") {
+      d.parents.push({ parent: id, child: anchor.id });
+      if (marry?.checked) d.spouses.push({ a: parents[0].id, b: id, former: false });
+    } else if (kind === "child") {
+      d.parents.push({ parent: anchor.id, child: id });
+      if (otherParent) d.parents.push({ parent: otherParent, child: id });
+    } else {
+      d.spouses.push({ a: anchor.id, b: id, former });
+    }
+    const rel = relToMe(id, d);
+    relWords.textContent = rel.kind === "none" ? "Not linked to you" : "Your " + rel.words;
+    relSide.textContent = sideText(rel.via, d);
+  }
+
   // ---- Title, save button and what it says ----
   const titles = { me: "Add yourself", parent: "Add a parent", child: "Add a child", spouse: "Add a spouse" };
   const saveBtn = h("button", { type: "submit", class: "btn small", form: "person-form" }, "Add");
@@ -375,6 +478,7 @@ function showForm(kind, anchorId) {
     else saveBtn.textContent = "Add";
     saveBtn.disabled = !first.input.value.trim() || !gender;
     drawDup();
+    drawRelate();
   }
 
   const spouseOf = gender === "m" ? "Husband of " : gender === "f" ? "Wife of " : "Spouse of ";
@@ -422,6 +526,7 @@ function showForm(kind, anchorId) {
     first.el, father.el, family.el, groupHint,
     otherParentEl, marryEl,
     dupBox,
+    relateBox,
     error);
   form.addEventListener("submit", (e) => {
     e.preventDefault();
