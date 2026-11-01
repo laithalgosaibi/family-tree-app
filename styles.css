@@ -816,3 +816,186 @@ dialog.confirm .warn { color: var(--danger); font-size: 15px; }
 /* The ··· menu */
 .menu-undo { margin-bottom: 22px; }
 .menu-caps { margin-bottom: 8px; }
+
+/* ---- Search by name ---- */
+
+/* Only on the chart, once there is someone to find */
+.search { display: none; }
+body.chart-mode .search { display: block; }
+
+.search-open {
+  position: absolute;
+  right: 52px;
+  bottom: 4px;
+  width: 44px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: none;
+  color: var(--gold);
+}
+.search-glass { width: 21px; height: 21px; stroke-width: 1.6; }
+
+.search-bar { display: none; align-items: center; gap: 12px; }
+.search-box {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: 40px;
+  padding: 0 6px 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--muted);
+}
+.search-box:focus-within { border-color: var(--gold); }
+.search-box input.search-input {
+  flex: 1;
+  width: auto;
+  height: auto;
+  min-height: 0;
+  box-shadow: none;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  padding: 0;
+  background: none;
+  font-size: 17px;
+  color: var(--ink);
+  -webkit-appearance: none;
+  appearance: none;
+}
+.search-box input.search-input:focus { outline: 0; }
+.search-input::-webkit-search-cancel-button { display: none; }
+.search-input::placeholder { color: var(--faint); }
+.search-clear {
+  width: 30px;
+  height: 30px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 22px;
+  line-height: 1;
+}
+.search-clear[hidden] { display: none; }
+
+.search-drop[hidden] { display: none; }
+.search-list { text-align: left; }
+.search-preview { display: none; }
+.search-empty { padding: 16px 2px; color: var(--muted); }
+.search-empty p { margin: 0; }
+
+.search-group { margin-bottom: 26px; }
+.search-group > .kicker { margin: 0; padding: 14px 0 10px; border-bottom: 1px solid var(--line); }
+
+.result {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  width: 100%;
+  padding: 12px 8px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: none;
+  text-align: left;
+}
+.result:active, .result.on { background: var(--gold-soft); }
+.result-top { display: flex; align-items: baseline; gap: 12px; }
+.result-name { flex: 1; min-width: 0; font-family: var(--font-heading); font-size: 21px; font-weight: 500; line-height: 1.25; overflow-wrap: anywhere; }
+.result-rel { flex: none; max-width: 45%; text-align: right; font-family: var(--font-heading); font-size: 16px; font-weight: 600; line-height: 1.25; color: var(--gold-ink); }
+.result-rel.none { color: var(--muted); font-weight: 500; }
+.result-sub { font-size: 14px; color: var(--muted); }
+.plain-tag { align-self: flex-start; margin: 2px 0 0; background: var(--surface); color: var(--ink); border: 1px solid var(--line); }
+
+/* People with the same name, side by side */
+.same-note { display: flex; align-items: center; gap: 8px; margin: 12px 0 2px; font-style: italic; color: var(--muted); font-size: 15px; }
+.same-note .icon { width: 17px; height: 17px; }
+.parents-table {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 16px;
+  row-gap: 2px;
+  margin: 4px 0 2px;
+  padding-left: 14px;
+  border-left: 2px solid var(--gold);
+}
+.pt-label { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); line-height: 1.9; }
+.pt-name { font-size: 15px; line-height: 1.6; }
+.differs { color: var(--gold-ink); }
+.missing { color: var(--faint); font-style: italic; }
+
+/* Phone: a full screen over the chart */
+@media (max-width: 699px) {
+  body.searching .search {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+    padding-top: env(safe-area-inset-top);
+  }
+  body.searching .search-open { display: none; }
+  body.searching .search-bar { display: flex; padding: 12px 16px 12px; border-bottom: 1px solid var(--line); }
+  body.searching .search-drop[hidden] { display: block; }
+  .search-drop { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 16px calc(24px + env(safe-area-inset-bottom)); }
+  .result.on { background: none; }
+  .result:active { background: var(--gold-soft); }
+}
+
+/* Mac: a box at the top left, results drop down under it with the highlighted person beside */
+@media (min-width: 700px) {
+  .search-open, .search-cancel { display: none; }
+  .search-bar {
+    display: flex;
+    position: absolute;
+    left: 16px;
+    bottom: 6px;
+    width: min(340px, calc(50vw - 120px));
+  }
+  .search-box { height: 38px; }
+  .search-box input.search-input { font-size: 16px; }
+  .search-drop {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 16px;
+    z-index: 30;
+    display: flex;
+    width: min(880px, calc(100vw - 32px));
+    max-height: min(560px, calc(100vh - 120px));
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.14);
+  }
+  .search-list { flex: 1; min-width: 0; overflow-y: auto; padding: 0 0 8px; }
+  .search-list .search-group { margin-bottom: 4px; }
+  .search-list .kicker { padding: 14px 20px 10px; }
+  .search-list .result { padding: 12px 20px; border-left: 3px solid transparent; }
+  .search-list .result.on { border-left-color: var(--gold); }
+  .search-list .same-note { padding: 0 20px; }
+  .search-list .search-empty { padding: 16px 20px; }
+  .search-preview {
+    display: flex;
+    flex-direction: column;
+    width: 330px;
+    flex: none;
+    padding: 18px 22px 20px;
+    border-left: 1px solid var(--line);
+    text-align: left;
+    overflow-y: auto;
+  }
+  .search-preview:empty { display: none; }
+  .preview-name { margin: 0 0 18px; font-family: var(--font-heading); font-weight: 500; font-size: 26px; line-height: 1.15; }
+  .preview-parent { display: flex; flex-direction: column; padding: 10px 14px; margin-bottom: 8px; border: 1px solid var(--line); border-radius: var(--radius); }
+  .preview-parent-name { font-size: 16px; }
+  .preview-show { margin-top: auto; align-self: flex-start; }
+  .search-preview .empty { margin-bottom: 18px; }
+}
+/* The search drop-down must sit above the chart and the person card */
+body.chart-mode .top { z-index: 10; }
