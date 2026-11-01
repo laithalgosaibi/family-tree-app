@@ -192,6 +192,7 @@ export function confirmDelete(id) {
       closeSheet();
       store.change(() => store.deletePerson(id), {
         message: `${name} was deleted.`,
+        offerUndo: true, // only deleting shows the Undo message
         detail: total ? `${His} ${plural(total, "link", "links")} went with ${him}.` : null,
       });
     },

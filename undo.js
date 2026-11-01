@@ -1,7 +1,8 @@
 // undo.js
-// The message at the bottom after every change, with its Undo button.
+// The message at the bottom after someone is deleted, with its Undo button.
 // It stays for 10 seconds and the gold line shows the time left.
-// On the Mac, ⌘Z also undoes. The ··· menu has "Undo last change" for later.
+// Adding and editing do not show it. Any change, including those, can still be undone
+// with ⌘Z on the Mac or "Undo last change" in the ··· menu.
 
 import * as store from "./store.js";
 import { h } from "./ui.js";
@@ -13,7 +14,7 @@ let toast = null;
 let timer = null;
 
 export function init() {
-  store.onHistory((note) => show(note, true));
+  store.onHistory((note) => { if (note.offerUndo) show(note, true); });
 
   document.addEventListener("keydown", (e) => {
     if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey || e.key.toLowerCase() !== "z") return;
