@@ -15,7 +15,7 @@ Plain web files, no build step, so any change is live as soon as it is saved:
 - `ui.js` small shared pieces (making elements, the pop-up sheet)
 - `backup.js` export and import of `.family` files, and the backup reminder
 - `edit.js` fixing mistakes: edit a name, unlink relatives, delete a person
-- `undo.js` the message after every change with its Undo button (and ⌘Z on the Mac)
+- `undo.js` the Undo message after a delete (and ⌘Z on the Mac for any change)
 - `fold.js` collapse and expand branches: which people are folded away on the chart
 - `kin.js` works out how two people are related, in words ("your first cousin once removed")
 - `sw.js` lets the app open without internet
