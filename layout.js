@@ -16,7 +16,7 @@ const SPOUSE_GAP = 30; // between husband and wife
 const BLOCK_GAP = 40; // between families in the same row
 const ROW_GAP = 80; // between rows, where the lines run
 const ROW_H = BOX_H + ROW_GAP;
-const PART_GAP = 160; // between parts of the tree that are not connected yet
+const PART_GAP = 200; // between parts of the tree that are not connected yet
 
 export function layoutTree(data) {
   const { people, meId } = data;
@@ -61,8 +61,10 @@ export function layoutTree(data) {
   const nodes = new Map(); // id -> { id, x, y }
   let offsetX = 0;
   let height = 0;
+  const partBoxes = []; // where each part sits, so a separate branch can get a frame
   for (const part of parts) {
     const placed = layoutPart(part, { parentsOf, childrenOf, spousesOf, people });
+    partBoxes.push({ ids: part, x: offsetX, width: placed.width, height: placed.height });
     for (const n of placed.nodes) {
       nodes.set(n.id, { id: n.id, x: n.x + offsetX, y: n.y, gen: n.gen, block: n.block, index: n.index });
     }
@@ -71,7 +73,7 @@ export function layoutTree(data) {
   }
 
   const lines = drawLines(nodes, { parentsOf, childrenOf, spousesOf, marriages, data });
-  return { nodes, lines, width: Math.max(0, offsetX - PART_GAP), height };
+  return { nodes, lines, parts: partBoxes, width: Math.max(0, offsetX - PART_GAP), height };
 }
 
 // ---- One connected part of the tree ----
