@@ -81,6 +81,29 @@ export function spousesOf(id) {
     .filter(Boolean);
 }
 
+// Children of `parentId` who have no other parent added yet and could be linked
+// to `otherId` as well, leaving out any already answered "No" (see notParent).
+export function onlyParentChildren(parentId, otherId) {
+  return childrenOf(parentId).filter((c) =>
+    parentsOf(c.id).length === 1 && (!otherId || (!isNotParent(otherId, c.id) && !checkParentLink(otherId, c.id))));
+}
+
+// "No, they are not this child's parent" answers, kept on this device so the
+// question on the card is not asked again. Not part of the tree, export or undo.
+const NOT_PARENT_KEY = "familyTree.notParent.v1";
+function loadNotParent() {
+  try { return new Set(JSON.parse(localStorage.getItem(NOT_PARENT_KEY) || "[]")); } catch { return new Set(); }
+}
+const notParent = loadNotParent();
+export function isNotParent(parentId, childId) {
+  return notParent.has(parentId + ">" + childId);
+}
+export function markNotParent(parentId, childIds) {
+  for (const c of childIds) notParent.add(parentId + ">" + c);
+  try { localStorage.setItem(NOT_PARENT_KEY, JSON.stringify([...notParent])); } catch { /* not important enough to stop the app */ }
+  listeners.forEach((fn) => fn());
+}
+
 // Words for how `otherId` is linked to `id` as a spouse: "Wife", "Former husband".
 export function spouseWord(id, otherId) {
   const link = tree.spouses.find((l) => (l.a === id && l.b === otherId) || (l.b === id && l.a === otherId));

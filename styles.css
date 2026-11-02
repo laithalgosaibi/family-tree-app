@@ -1122,3 +1122,6 @@ body.chart-mode .top { z-index: 10; }
 
 /* The two people on the chart */
 .box.pair-end { border: 1.5px solid var(--gold); }
+
+/* "Is Fatima their mother too?" on a person's card */
+.missing-parent { margin-top: 18px; border-style: dashed; }

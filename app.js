@@ -316,12 +316,48 @@ function showPerson(id, { centre = false, move = true } = {}) {
     group("Parents", parents, parentWord),
     group(spouses.length > 1 ? "Spouses" : "Spouse", spouses, (s) => store.spouseWord(id, s.id)),
     group("Children", children, (c) => store.parentsLabel(c) || childWord(c)),
+    ...missingParentBoxes(p, spouses),
   ].filter(Boolean));
   if (!samePerson) panel.scrollTop = 0;
   document.body.style.setProperty("--panel-h", panel.offsetHeight + "px");
   document.body.style.setProperty("--panel-w", panel.offsetWidth + "px");
   chart.select(id);
   if (move) chart.centreOn(id, { onlyIfHidden: !centre });
+}
+
+// ---- Children with only one parent added, when that parent has a husband or wife ----
+// "Khalid and Nadia have only Saleh as a parent. Is Fatima their mother too?"
+// One tap links them all (and Undo takes it back). "No" stops asking on this device.
+
+function missingParentBoxes(p, spouses) {
+  const boxes = [];
+  for (const s of spouses) {
+    for (const [has, missing] of [[p, s], [s, p]]) {
+      const kids = store.onlyParentChildren(has.id, missing.id).sort(byName);
+      if (kids.length) boxes.push(missingParentBox(has, missing, kids));
+    }
+  }
+  return boxes;
+}
+
+function missingParentBox(has, missing, kids) {
+  const names = kids.map((c) => c.first);
+  const list = names.length === 1 ? names[0]
+    : names.slice(0, -1).join(", ") + " and " + names[names.length - 1];
+  const their = kids.length > 1 ? "their" : kids[0].gender === "m" ? "his" : kids[0].gender === "f" ? "her" : "their";
+  const word = missing.gender === "m" ? "father" : missing.gender === "f" ? "mother" : "parent";
+  const link = () => {
+    store.change(() => {
+      for (const c of kids) if (!store.checkParentLink(missing.id, c.id)) store.linkParent(missing.id, c.id);
+    }, { message: `${missing.first} was linked as ${their} ${word}.` });
+  };
+  return h("section", { class: "dup missing-parent" },
+    kicker("Missing a parent?"),
+    h("p", {}, `${list} ${kids.length === 1 ? "has" : "have"} only ${has.first} as a parent. `
+      + `Is ${missing.first} ${their} ${word} too?`),
+    h("div", { class: "dup-actions" },
+      h("button", { type: "button", class: "btn small", onclick: link }, `Yes, link to ${missing.first}`),
+      h("button", { type: "button", class: "text-btn", onclick: () => store.markNotParent(missing.id, kids.map((c) => c.id)) }, "No")));
 }
 
 // ---- One form for every new person ----
@@ -404,6 +440,33 @@ function showForm(kind, anchorId) {
         h("span", { class: "row-sub" }, "Links the two parents as husband and wife")));
   }
 
+  // ---- Their children (adding a spouse) ----
+  // Children of the tapped person who have only them as a parent can get the new
+  // husband or wife as their other parent too. Ticked when this is the only marriage.
+  const kidBoxes = [];
+  let kidsEl = null;
+  const kidsLabel = h("span", { class: "field-label" });
+  if (kind === "spouse") {
+    const kids = store.onlyParentChildren(anchor.id, null).sort(byName);
+    const firstMarriage = store.spousesOf(anchor.id).length === 0;
+    for (const c of kids) {
+      const input = h("input", { type: "checkbox", value: c.id, checked: firstMarriage });
+      input.addEventListener("change", () => update());
+      kidBoxes.push(input);
+    }
+    if (kids.length) {
+      kidsEl = h("div", { class: "field" }, kidsLabel,
+        h("div", { class: "choices" }, kids.map((c, i) => h("label", { class: "choice" }, kidBoxes[i],
+          h("span", { class: "row-text" },
+            h("span", { class: "row-name" }, store.fullName(c)),
+            h("span", { class: "row-sub" }, `${childWord(c)} of ${anchor.first}`))))),
+        h("p", { class: "field-hint" }, firstMarriage
+          ? "Untick anyone from another marriage."
+          : `${anchor.first} has another marriage, so tick only the children from this one.`));
+    }
+  }
+  const pickedKids = () => kidBoxes.filter((b) => b.checked).map((b) => b.value);
+
   // ---- Someone with this name is already in the tree ----
   const dupBox = h("div", { class: "dup", hidden: true });
   const dismissed = new Set();
@@ -479,6 +542,7 @@ function showForm(kind, anchorId) {
       if (otherParent) d.parents.push({ parent: otherParent, child: id });
     } else {
       d.spouses.push({ a: anchor.id, b: id, former });
+      for (const c of pickedKids()) d.parents.push({ parent: id, child: c });
     }
     const rel = relToMe(id, d);
     relWords.textContent = rel.kind === "none" ? "Not linked to you" : "Your " + rel.words;
@@ -491,6 +555,7 @@ function showForm(kind, anchorId) {
   const error = h("p", { class: "error", role: "alert" });
 
   function update() {
+    kidsLabel.textContent = gender === "m" ? "Also the father of" : gender === "f" ? "Also the mother of" : "Also the parent of";
     if (kind === "child") saveBtn.textContent = gender === "f" ? "Add daughter" : "Add son";
     else if (kind === "parent") saveBtn.textContent = gender === "f" ? "Add mother" : "Add father";
     else saveBtn.textContent = "Add";
@@ -520,7 +585,10 @@ function showForm(kind, anchorId) {
         } else if (kind === "child") {
           store.linkParent(anchor.id, id);
           if (otherParent && !store.checkParentLink(otherParent, id)) store.linkParent(otherParent, id);
-        } else store.linkSpouse(anchor.id, id, former);
+        } else {
+          store.linkSpouse(anchor.id, id, former);
+          for (const c of pickedKids()) if (!store.checkParentLink(id, c)) store.linkParent(id, c);
+        }
         return id;
       }, (id) => {
         const name = store.fullName(store.getPerson(id));
@@ -542,7 +610,7 @@ function showForm(kind, anchorId) {
   const form = h("form", { id: "person-form", class: "person-form" },
     segment, spouseGenderSeg,
     first.el, father.el, family.el, groupHint,
-    otherParentEl, marryEl,
+    otherParentEl, marryEl, kidsEl,
     dupBox,
     relateBox,
     error);
