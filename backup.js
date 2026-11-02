@@ -18,9 +18,11 @@ const treeIcon = () => icon('<circle cx="10" cy="4.5" r="2"/><circle cx="5" cy="
   + '<path d="M10 6.5v4M5 13.5v-3h10v3"/>', "icon file-icon");
 
 let afterImport = () => {};
+let openFinder = () => {};
 
-export function init({ onImported }) {
+export function init({ onImported, onFinder }) {
   afterImport = onImported;
+  openFinder = onFinder;
   // The reminder waits until any open form is closed.
   sheet.addEventListener("close", () => setTimeout(checkReminder, 300));
   store.onChange(() => setTimeout(checkReminder, 300));
@@ -78,7 +80,9 @@ export function showMenu() {
       h("span", {})),
     h("ul", { class: "rows menu-undo" },
       item("Undo last change", last ? last.message : "Nothing to undo yet",
-        () => { closeSheet(); undoLast(); }, !last)),
+        () => { closeSheet(); undoLast(); }, !last),
+      item("Relationship finder", "Pick any two people to see how they are related",
+        () => { closeSheet(); openFinder(); }, !hasTree)),
     h("p", { class: "label-caps menu-caps" }, "Backups"),
     hasTree && h("p", { class: "context" }, lastBackupText()),
     h("ul", { class: "rows" },

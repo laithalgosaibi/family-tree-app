@@ -14,7 +14,7 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
 // container: the element the chart fills.
-// options.onSelect(id): a box was tapped. options.onEmpty(): empty space was tapped.
+// options.onSelect(id, event): a box was tapped. options.onEmpty(): empty space was tapped.
 // options.onFold(id): the − or +N button under a box was tapped.
 // options.insets(): how much of the chart is covered by the person panel { right, bottom }.
 export function createChart(container, { onSelect, onEmpty, onFold, insets }) {
@@ -33,6 +33,7 @@ export function createChart(container, { onSelect, onEmpty, onFold, insets }) {
   let data = null;
   let meId = null;
   let selectedId = null;
+  let pair = null; // { from, to } while the relationship finder is open
   const listeners = new Set();
 
   function apply({ animate = false } = {}) {
@@ -98,7 +99,8 @@ export function createChart(container, { onSelect, onEmpty, onFold, insets }) {
     svg.setAttribute("viewBox", `${-pad} ${-pad} ${layout.width + pad * 2} ${layout.height + pad * 2}`);
 
     // The chain of people between you and the person tapped is drawn in gold.
-    const path = selectedId ? pathTo(data, meId, selectedId) : [];
+    // While the relationship finder is open, it is the chain between its two people instead.
+    const path = pair ? pathTo(data, pair.from, pair.to) : selectedId ? pathTo(data, meId, selectedId) : [];
     const onPath = new Set(path);
     const linked = (a, b) => path.some((id, i) => (id === a && path[i + 1] === b) || (id === b && path[i + 1] === a));
 
@@ -127,6 +129,8 @@ export function createChart(container, { onSelect, onEmpty, onFold, insets }) {
       if (n.id === meId) box.classList.add("me");
       if (onPath.has(n.id)) box.classList.add("on-path");
       if (n.id === selectedId) box.classList.add("selected");
+      const end = pair ? (n.id === pair.from ? "From" : n.id === pair.to ? "To" : null) : null;
+      if (end) box.classList.add("selected", "pair-end");
       const branch = shown.branches.get(n.id);
       if (branch) box.classList.add("folded");
       box.dataset.id = n.id;
@@ -143,10 +147,10 @@ export function createChart(container, { onSelect, onEmpty, onFold, insets }) {
         sub.textContent = rest;
         box.append(sub);
       }
-      if (n.id === meId) {
+      if (end || n.id === meId) {
         const tag = document.createElement("span");
         tag.className = "box-you";
-        tag.textContent = "You";
+        tag.textContent = end || "You";
         box.append(tag);
       }
       els.push(box);
@@ -298,7 +302,7 @@ export function createChart(container, { onSelect, onEmpty, onFold, insets }) {
     const foldBtn = e.target.closest(".fold");
     const box = e.target.closest(".box");
     if (foldBtn) { e.stopPropagation(); onFold?.(foldBtn.dataset.fold); }
-    else if (box) onSelect(box.dataset.id);
+    else if (box) onSelect(box.dataset.id, e);
     else if (!e.target.closest(".chart-controls")) onEmpty();
   }, true);
 
@@ -349,6 +353,27 @@ export function createChart(container, { onSelect, onEmpty, onFold, insets }) {
     select(id) {
       selectedId = id;
       draw();
+    },
+    // The two people the relationship finder is comparing, or null to go back to normal.
+    setPair(from, to) {
+      pair = from && to ? { from, to } : null;
+      draw();
+    },
+    // Move and zoom so all these people fit in the part of the chart you can see.
+    fitTo(ids, { animate = true } = {}) {
+      const ns = ids.map((id) => layout?.nodes.get(id)).filter(Boolean);
+      if (!ns.length) return;
+      const x0 = Math.min(...ns.map((n) => n.x));
+      const y0 = Math.min(...ns.map((n) => n.y));
+      const x1 = Math.max(...ns.map((n) => n.x + BOX_W));
+      const y1 = Math.max(...ns.map((n) => n.y + BOX_H));
+      const v = visibleArea();
+      const m = 40;
+      const fit = Math.min((v.w - m * 2) / (x1 - x0), (v.h - m * 2) / (y1 - y0));
+      scale = clamp(Math.min(fit, 1), MIN_SCALE, MAX_SCALE);
+      tx = v.w / 2 - ((x0 + x1) / 2) * scale;
+      ty = v.h / 2 - ((y0 + y1) / 2) * scale;
+      apply({ animate });
     },
     centreOn,
     has(id) { return !!layout?.nodes.has(id); },

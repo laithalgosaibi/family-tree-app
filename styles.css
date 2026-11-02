@@ -999,3 +999,126 @@ body.chart-mode .search { display: block; }
 }
 /* The search drop-down must sit above the chart and the person card */
 body.chart-mode .top { z-index: 10; }
+
+/* ---- Relationship finder ---- */
+
+/* Mac: a button at the top right of the chart. On a phone it is in the ··· menu. */
+.finder-open { display: none; }
+@media (min-width: 700px) {
+  body.chart-mode .finder-open {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    position: absolute;
+    right: 60px;
+    bottom: 6px;
+    height: 38px;
+    padding: 0 14px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--ink);
+    font-family: var(--font-heading);
+    font-size: 17px;
+    font-weight: 600;
+  }
+  .finder-open .icon { color: var(--gold); }
+  body.finder-on .finder-open { border-color: var(--gold); background: var(--gold-soft); }
+}
+@media (min-width: 700px) and (hover: hover) { body.chart-mode .finder-open:hover { border-color: var(--gold); } }
+
+/* Phone: the finder fills the screen */
+.panel.finder.full {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  max-height: none;
+  padding: env(safe-area-inset-top) 0 calc(24px + env(safe-area-inset-bottom));
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--bg);
+}
+.finder-bar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+}
+.back-btn { justify-self: start; font-weight: 500; }
+.finder-title { margin: 0; font-family: var(--font-heading); font-weight: 500; font-size: 21px; }
+.panel.finder.full .finder-body { padding: 16px 16px 0; }
+.finder-head { display: flex; justify-content: space-between; align-items: center; margin: -6px 0 12px; }
+.finder-head .kicker { margin: 0; }
+
+/* From and To, with the swap button on the line between them */
+.pair { position: relative; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); overflow: hidden; }
+.panel.finder.full .pair { background: var(--surface); }
+.pair-slot {
+  display: grid;
+  grid-template-columns: 52px 1fr;
+  align-items: center;
+  width: 100%;
+  min-height: 64px;
+  padding: 10px 60px 10px 14px;
+  border: 0;
+  background: none;
+  text-align: left;
+}
+.pair-slot.picking { background: var(--gold-soft); }
+@media (hover: hover) { .pair-slot:hover { background: var(--gold-soft); } }
+.pair-label { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold-ink); }
+.pair-text { display: flex; flex-direction: column; min-width: 0; }
+.pair-name { font-family: var(--font-heading); font-size: 21px; font-weight: 500; line-height: 1.2; overflow-wrap: anywhere; }
+.pair-name.empty-name { color: var(--muted); font-style: italic; }
+.pair-sub { font-size: 14px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pair-rule { display: block; height: 1px; margin: 0 60px 0 66px; background: var(--line); }
+.swap {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  width: 40px;
+  height: 40px;
+  margin-top: -20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--gold);
+}
+.swap:disabled { color: var(--faint); }
+.swap:not(:disabled):active { background: var(--gold-soft); }
+.pair-hint { margin: 10px 0 0; font-size: 14px; color: var(--muted); }
+
+/* Choosing someone by name */
+.finder-search { display: flex; align-items: center; gap: 14px; margin: 16px 0 0; }
+.finder-results .kicker { margin: 16px 0 0; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.finder-results .result-name { font-size: 20px; }
+
+/* The answer */
+.finder-answer { margin-top: 22px; }
+.finder-answer .kicker { margin-bottom: 2px; }
+.finder-words { margin: 0 0 8px; font-family: var(--font-heading); font-weight: 500; font-size: 32px; line-height: 1.1; overflow-wrap: anywhere; }
+.finder-back { margin: 0; }
+.finder-empty { margin-top: 20px; }
+.finder-shared { margin: 6px 0 10px; font-size: 15px; color: var(--muted); }
+.finder-show { margin-top: 20px; }
+.panel.finder .group-title { margin-top: 14px; }
+
+/* Phone: the line on the chart, with a small bar to go back to the answer */
+.panel.finder.mini { padding: 10px 10px calc(10px + env(safe-area-inset-bottom)) 20px; }
+.mini-bar { display: flex; align-items: center; gap: 10px; }
+.mini-text { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; padding: 0; border: 0; background: none; text-align: left; }
+.mini-text .kicker { margin: 0; font-size: 12px; }
+.mini-words { font-family: var(--font-heading); font-size: 19px; font-weight: 500; line-height: 1.2; overflow-wrap: anywhere; }
+.mini-bar .text-btn { flex: none; }
+
+/* The two people on the chart */
+.box.pair-end { border: 1.5px solid var(--gold); }

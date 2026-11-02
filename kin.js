@@ -291,3 +291,46 @@ export function pathWithWords(data, fromId, path) {
 export function pathTo(data, fromId, toId) {
   return relationship(data, fromId, toId).path;
 }
+
+// ---- Saying it for anyone, not only you ----
+
+// "your" when the person is you, otherwise "Khalid’s".
+export function whose(data, id) {
+  if (id === data.meId) return "your";
+  return (data.people[id]?.first || "their") + "’s";
+}
+
+// Which side of the family, said from `fromId`'s point of view:
+// "On your father’s side", "On Khalid’s mother’s side", "Through Khalid’s wife, Sara".
+export function sideWords(data, via, fromId = data.meId) {
+  if (!via) return "";
+  const w = whose(data, fromId);
+  if (via === "both") return `On both ${w} father’s and mother’s sides`;
+  if (via.spouse) {
+    const s = data.people[via.spouse];
+    if (!s) return "";
+    const link = data.spouses.find((l) => (l.a === fromId && l.b === s.id) || (l.b === fromId && l.a === s.id));
+    const word = (link?.former ? "former " : "") + (s.gender === "m" ? "husband" : s.gender === "f" ? "wife" : "spouse");
+    return `Through ${w} ${word}, ${s.first}`;
+  }
+  const p = data.people[via];
+  if (!p) return "";
+  return p.gender === "m" ? `On ${w} father’s side` : p.gender === "f" ? `On ${w} mother’s side` : `Through ${w} parent ${p.first}`;
+}
+
+// The ancestors two blood relatives both come from: the common ancestor on the path,
+// plus their husband or wife when the two lines come down through children of both.
+export function sharedAncestors(data, rel) {
+  if (rel.kind !== "blood" || !rel.common.length) return [];
+  const ix = index(data);
+  const out = [];
+  for (const c of rel.common) {
+    out.push(c);
+    const i = rel.path.indexOf(c);
+    const sides = [rel.path[i - 1], rel.path[i + 1]].filter(Boolean);
+    if (sides.length < 2) continue;
+    const both = ix.parents(sides[0]).filter((p) => p !== c && ix.parents(sides[1]).includes(p));
+    out.push(...both);
+  }
+  return out;
+}

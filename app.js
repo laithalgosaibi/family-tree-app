@@ -8,8 +8,10 @@ import * as backup from "./backup.js";
 import * as edit from "./edit.js";
 import * as undo from "./undo.js";
 import * as fold from "./fold.js";
-import { relationship, pathWithWords } from "./kin.js";
+import { relationship, pathWithWords, sideWords } from "./kin.js";
 import * as search from "./search.js";
+import * as finder from "./finder.js";
+import { finderIcon } from "./finder.js";
 
 const main = document.getElementById("main");
 
@@ -41,20 +43,9 @@ function relLabel(id) {
   return rel.kind === "none" ? null : "Your " + rel.words;
 }
 
-// Which side of the family: "On your father's side", "Through your wife, Sara".
+// Which side of the family: "On your father’s side", "Through your wife, Sara".
 function sideText(via, data = store.getData()) {
-  if (!via) return "";
-  if (via === "both") return "On both your father’s and mother’s sides";
-  if (via.spouse) {
-    const s = data.people[via.spouse];
-    if (!s) return "";
-    const link = data.spouses.find((l) => (l.a === data.meId && l.b === s.id) || (l.b === data.meId && l.a === s.id));
-    const word = (link?.former ? "former " : "") + (s.gender === "m" ? "husband" : s.gender === "f" ? "wife" : "spouse");
-    return `Through your ${word}, ${s.first}`;
-  }
-  const p = data.people[via];
-  if (!p) return "";
-  return p.gender === "m" ? "On your father’s side" : p.gender === "f" ? "On your mother’s side" : `Through your parent ${p.first}`;
+  return sideWords(data, via, data.meId);
 }
 
 // The other ways someone is related to you, when your parents are related to each other.
@@ -103,6 +94,7 @@ function renderHome() {
   }
   if (!chart) return buildChart();
   redraw(panelId || me.id);
+  if (finder.isOpen()) return finder.refresh();
   if (panelId && chart.has(panelId)) showPerson(panelId, { move: false });
   else if (panelId) closePanel();
 }
@@ -141,6 +133,24 @@ function revealPerson(id) {
   redraw(keep || id);
 }
 
+// Open any folded branches that hide these people, drawing the chart again once.
+function revealAll(ids) {
+  const data = store.getData();
+  let opened = false;
+  for (const id of ids) if (fold.reveal(data, id)) opened = true;
+  if (opened) redraw(ids[0]);
+}
+
+// ---- The relationship finder (finder.js), in the same panel as the person card ----
+
+function openFinder() {
+  if (!chart || !store.getMe()) return;
+  const to = panelId; // the person whose card is open, if any, starts in the To box
+  panelId = null;
+  chart.select(null);
+  finder.open({ to });
+}
+
 function centreOnMe() {
   const me = store.getMe();
   revealPerson(me.id);
@@ -165,10 +175,15 @@ function buildChart() {
   foldNote = h("div", { class: "fold-note", role: "status", hidden: true });
 
   main.replaceChildren(area, foldNote, controls, hint, panel);
+  finder.init(panel, { chart: () => chart, reveal: revealAll, onClose: closePanel });
 
   chart = createChart(area, {
-    onSelect: (id) => showPerson(id),
-    onEmpty: closePanel,
+    onSelect: (id, e) => {
+      // Mac: with the finder open, a click sets To and an ⌥-click sets From.
+      if (finder.isOpen() && wide.matches) return finder.pickFromChart(id, e?.altKey);
+      showPerson(id);
+    },
+    onEmpty: () => { if (!finder.isOpen()) closePanel(); },
     onFold: toggleFold,
     insets: () => panel.hidden ? { right: 0, bottom: 0 }
       : wide.matches ? { right: panel.offsetWidth, bottom: 0 } : { right: 0, bottom: panel.offsetHeight },
@@ -201,6 +216,7 @@ function targetIcon() {
 
 function closePanel() {
   if (!panel || panel.hidden) return;
+  finder.close();
   panel.hidden = true;
   panelId = null;
   document.body.style.setProperty("--panel-h", "0px");
@@ -256,6 +272,7 @@ function renderFirstOpen() {
 function showPerson(id, { centre = false, move = true } = {}) {
   const p = store.getPerson(id);
   if (!p) return closePanel();
+  finder.close(); // tapping someone on the chart while the finder shows its line opens their card
   if (!chart.has(id)) { revealPerson(id); centre = true; }
   const isMe = p.id === store.getMe()?.id;
   const parents = store.parentsOf(id);
@@ -557,10 +574,16 @@ document.getElementById("menu-btn").addEventListener("click", backup.showMenu);
 search.init((id) => {
   if (chart) showPerson(id, { centre: true });
 });
+// Mac: the Relationship finder button at the top. On a phone it is in the ··· menu.
+document.querySelector(".top").append(
+  h("button", { class: "finder-open", onclick: () => (finder.isOpen() ? closePanel() : openFinder()) },
+    finderIcon(), h("span", {}, "Relationship finder")));
 undo.init();
 backup.init({
+  onFinder: openFinder,
   // A new tree came in from a file: draw it fresh and centre on "me".
   onImported: () => {
+    finder.close();
     if (panel) panel.hidden = true;
     fold.expandAll();
     chart = null;
