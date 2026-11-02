@@ -6,10 +6,12 @@
 import { layoutTree, BOX_W, BOX_H } from "./layout.js";
 import { pathTo } from "./kin.js";
 import * as fold from "./fold.js";
+import { groups, branchName } from "./branch.js";
 
 const MIN_SCALE = 0.25;
 const MAX_SCALE = 2;
 const SVG_NS = "http://www.w3.org/2000/svg";
+const FRAME_TOP = 62; // room above a separate branch for its name
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
@@ -119,7 +121,7 @@ export function createChart(container, { onSelect, onEmpty, onFold, insets }) {
     }
     svg.replaceChildren(...grey, ...gold, ...badges);
 
-    const els = [];
+    const els = branchFrames();
     for (const n of layout.nodes.values()) {
       const p = data.people[n.id];
       const rest = [p.father, p.family].filter(Boolean).join(" ");
@@ -177,6 +179,33 @@ export function createChart(container, { onSelect, onEmpty, onFold, insets }) {
       }
     }
     boxes.replaceChildren(...els);
+  }
+
+  // A dashed frame around each separate branch, with its name and how many people are in it.
+  function branchFrames() {
+    const g = groups(data);
+    const frames = [];
+    for (const part of layout.parts) {
+      const group = g.groupOf.get(part.ids[0]);
+      if (!group || group.hasMe) continue;
+      const pad = 22;
+      const count = group.ids.length;
+      const frame = document.createElement("div");
+      frame.className = "branch-frame";
+      frame.style.left = part.x - pad + "px";
+      frame.style.top = -FRAME_TOP + "px";
+      frame.style.width = part.width + pad * 2 + "px";
+      frame.style.height = part.height + FRAME_TOP + pad + 4 + "px";
+      const label = document.createElement("span");
+      label.className = "branch-label";
+      label.textContent = `Not yet connected · ${count === 1 ? "1 person" : count + " people"}`;
+      const name = document.createElement("span");
+      name.className = "branch-name";
+      name.textContent = branchName(data, group.ids);
+      frame.append(label, name);
+      frames.push(frame);
+    }
+    return frames;
   }
 
   function polyline(points, cls) {

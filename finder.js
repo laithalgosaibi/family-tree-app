@@ -10,6 +10,8 @@ import * as store from "./store.js";
 import { relationship, pathWithWords, sideWords, whose, sharedAncestors } from "./kin.js";
 import { search, fullName } from "./find.js";
 import { h, icon, kicker } from "./ui.js";
+import { branchOf, groups, suggestLinks, question } from "./branch.js";
+import { showLink, linkIcon } from "./link.js";
 
 const wide = window.matchMedia("(min-width: 700px)");
 const mouse = window.matchMedia("(hover: hover) and (pointer: fine)");
@@ -274,9 +276,7 @@ function answer(data) {
     return h("section", { class: "finder-answer" },
       kicker("Not connected yet"),
       h("h2", { class: "finder-words" }, "No line between them yet"),
-      h("p", { class: "finder-back" },
-        `There is no line in the tree between ${nameOf(data, from)} and ${nameOf(data, to)} yet. `
-        + "Link one of them to a relative of the other, and the answer appears here."));
+      ...notConnected(data, from, to));
   }
 
   const back = relationship(data, to, from);
@@ -302,6 +302,37 @@ function answer(data) {
     chain(data, rel),
     !wide.matches && h("button", { type: "button", class: "btn small with-icon finder-show", onclick: showOnChart },
       targetIcon(), "Show on the chart"));
+}
+
+// Not connected: which of them is in a separate branch, and a possible link between the two groups.
+function notConnected(data, from, to) {
+  const g = groups(data);
+  const bTo = branchOf(data, to, g);
+  const bFrom = branchOf(data, from, g);
+  const inBranch = bTo ? to : bFrom ? from : null;
+  const branch = bTo || bFrom;
+  if (!branch) {
+    return [h("p", { class: "finder-back" },
+      `There is no line in the tree between ${nameOf(data, from)} and ${nameOf(data, to)} yet. `
+      + "Link one of them to a relative of the other, and the answer appears here.")];
+  }
+  const other = inBranch === to ? from : to;
+  const otherIds = g.groupOf.get(other).ids;
+  const s = suggestLinks(data, branch.ids, otherIds)[0];
+  const out = [h("p", { class: "finder-back" },
+    `${fullName(data.people[inBranch])} is in ${branch.name.replace(/^The/, "the")}, which isn’t joined to your tree yet.`)];
+  if (s) {
+    out.push(h("div", { class: "branch-suggest finder-suggest" },
+      kicker("Possible link"),
+      h("p", { class: "branch-question" }, question(data, s)),
+      h("p", { class: "row-sub" }, s.reason),
+      h("button", { type: "button", class: "btn small with-icon", onclick: () => showLink(s.id, { role: s.role, otherId: s.otherId }) },
+        linkIcon(), "Link them")));
+  } else {
+    out.push(h("button", { type: "button", class: "btn small with-icon finder-show", onclick: () => showLink(inBranch) },
+      linkIcon(), `Link ${data.people[inBranch].first} to the tree`));
+  }
+  return out;
 }
 
 // "You" for you, otherwise their full name.

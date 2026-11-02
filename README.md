@@ -21,6 +21,8 @@ Plain web files, no build step, so any change is live as soon as it is saved:
 - `find.js` search by name: who matches what is typed, other spellings, and telling apart people with the same name
 - `search.js` the search box and its results
 - `finder.js` the relationship finder: pick any two people and see how they are related
+- `branch.js` separate branches: who is not joined to you yet, and likely links worked out from the names
+- `link.js` the Link to the tree screen, which joins a separate branch to the tree
 - `sw.js` lets the app open without internet
 
 Everything is saved in the browser on the device being used. Nothing is sent anywhere.
@@ -29,6 +31,7 @@ The ··· button also has Undo last change. Undo remembers the last 30 changes 
 Tap anyone to see how they are related to you, which side of the family they are on, and every step between you.
 Search by name with the magnifying glass on a phone, or the box at the top left on a Mac (⌘F). Other spellings match too, so Yusuf finds Yousef. When two people share a name, both sets of parents are shown so you can tell them apart.
 The relationship finder shows how any two people are related, both ways round, with the shared ancestors and every step between them. On a Mac it is the button at the top right (click a box to set To, ⌥-click to set From). On a phone it is in the ··· menu.
+A family you know but can't place yet can be started from the ··· menu: Start a separate branch. It sits beside your tree in a dashed frame. Tap anyone in it to see a possible link from the names (Salma's father's name is Hasan and she is an Azar, so Hasan Ali Azar may be her father), or Link another way. One link joins the whole branch.
 The small − under anyone with children folds away everyone below them. Tap +N to open it again, or Expand all at the top.
 
 ## Try it on a computer
@@ -45,4 +48,6 @@ From this folder run `python3 -m http.server` and open http://localhost:8000
 6. Relationship to me in words (done)
 7. Search by name (done)
 8. Relationship finder for any two people (done)
-9. Separate branches and linking them later
+9. Separate branches and linking them later (done)
+
+Version 1 is complete. Next, from the plan: phone and Mac sync, then read-only family sharing, then relatives adding people.

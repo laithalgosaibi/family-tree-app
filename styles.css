@@ -1125,3 +1125,79 @@ body.chart-mode .top { z-index: 10; }
 
 /* "Is Fatima their mother too?" on a person's card */
 .missing-parent { margin-top: 18px; border-style: dashed; }
+
+/* ---- Separate branches ---- */
+
+/* The dashed frame around a branch on the chart */
+.branch-frame {
+  position: absolute;
+  border: 1px dashed var(--chart-line);
+  border-radius: 6px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: max-content; /* a branch of one person still fits its label */
+  pointer-events: none;
+}
+.branch-label {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold-ink);
+  white-space: nowrap;
+}
+.branch-name { font-family: var(--font-heading); font-size: 19px; font-weight: 500; line-height: 1.15; }
+
+/* "This branch isn’t joined to your tree yet" on a person's card */
+.branch-box {
+  margin-top: 18px;
+  padding: 14px 16px;
+  border: 1px dashed var(--chart-line);
+  border-radius: var(--radius);
+}
+.branch-intro { margin: 0; }
+.branch-box .hint { margin-top: 6px; }
+.branch-link { margin-top: 12px; }
+.branch-suggest { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.branch-suggest .row-sub { display: block; }
+.branch-question { margin: 0 0 4px; font-family: var(--font-heading); font-size: 22px; font-weight: 500; line-height: 1.2; }
+.branch-other { display: block; margin-top: 10px; padding-left: 0; }
+.finder-suggest { margin-top: 16px; padding: 14px 16px; border: 1px dashed var(--chart-line); border-radius: var(--radius); }
+.finder-suggest .btn { margin-top: 12px; }
+
+/* The "Link to the tree" sheet */
+.link-name { margin: 0; }
+.link-sheet > .row-sub { display: block; margin: 2px 0 0; }
+.link-segment .segment { grid-template-columns: 1fr 1fr 1fr; }
+.link-form { margin-top: 18px; }
+.link-list { display: flex; flex-direction: column; gap: 8px; }
+.link-caps { margin: 2px 0 0; }
+.link-list .hint { margin: 0; }
+.link-pick {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: none;
+  text-align: left;
+}
+.link-pick.picked { border-color: var(--gold); background: var(--gold-soft); }
+.link-pick .radio-dot { margin-top: 5px; background: none; border-color: var(--faint); }
+.link-pick.picked .radio-dot { border-color: var(--gold); background: radial-gradient(circle, var(--gold) 0 4.5px, transparent 5px); }
+.link-pick .row-name { font-size: 19px; }
+.link-rel { display: block; font-size: 15px; color: var(--gold-ink); }
+.link-rel.none { color: var(--muted); }
+.link-reason { display: block; margin-top: 4px; font-size: 14px; font-style: italic; color: var(--muted); }
+.link-why { color: var(--danger); }
+.link-changes:empty { display: none; }
+.link-changes { padding-top: 14px; border-top: 1px solid var(--line); }
+.link-changes p { margin: 0; }
+.link-line { font-family: var(--font-heading); font-size: 21px; font-weight: 500; line-height: 1.25; }
+.link-joins { margin-top: 6px !important; font-size: 15px; }
+.link-also { margin-top: 12px; }
+.link-also .row-name { font-size: 16px; }
+.link-btn { margin-top: 4px; }

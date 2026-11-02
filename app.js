@@ -12,6 +12,8 @@ import { relationship, pathWithWords, sideWords } from "./kin.js";
 import * as search from "./search.js";
 import * as finder from "./finder.js";
 import { finderIcon } from "./finder.js";
+import { branchOf, suggestForBranch, question, roleWord } from "./branch.js";
+import * as link from "./link.js";
 
 const main = document.getElementById("main");
 
@@ -296,7 +298,7 @@ function showPerson(id, { centre = false, move = true } = {}) {
     h("div", { class: "card-top" },
       h("button", { class: "text-btn", onclick: () => edit.showEdit(id) }, "Edit"),
       h("button", { class: "icon-btn", "aria-label": "Close", onclick: closePanel }, "×")),
-    kicker(isMe ? "You" : rel.kind === "none" ? "Not linked to you yet" : "Your " + rel.words),
+    kicker(isMe ? "You" : rel.kind === "none" ? "Not yet connected to you" : "Your " + rel.words),
     h("h2", { class: "person-name" }, store.fullName(p)),
     parents.length > 0 && h("p", { class: "person-parents" }, store.parentsLabel(p, { full: true })),
     side && h("p", { class: "person-side" }, side),
@@ -310,9 +312,7 @@ function showPerson(id, { centre = false, move = true } = {}) {
         h("span", { class: "action-icon", "aria-hidden": "true" }, "↔"), "Add spouse")),
     parents.length >= 2 && h("p", { class: "hint" }, "Both parents are added."),
     !isMe && rel.path.length > 1 && connectionSection(rel),
-    rel.kind === "none" && h("section", { class: "group" },
-      h("h3", { class: "group-title" }, "How you’re connected"),
-      h("p", { class: "empty" }, "There is no line between you and them in the tree yet. Link them to a relative of yours to see how you are related.")),
+    rel.kind === "none" && branchBox(id),
     group("Parents", parents, parentWord),
     group(spouses.length > 1 ? "Spouses" : "Spouse", spouses, (s) => store.spouseWord(id, s.id)),
     group("Children", children, (c) => store.parentsLabel(c) || childWord(c)),
@@ -323,6 +323,39 @@ function showPerson(id, { centre = false, move = true } = {}) {
   document.body.style.setProperty("--panel-w", panel.offsetWidth + "px");
   chart.select(id);
   if (move) chart.centreOn(id, { onlyIfHidden: !centre });
+}
+
+// ---- Someone in a separate branch: how to join it to the tree ----
+// "This branch isn’t joined to your tree yet", with a possible link worked out from the names.
+
+function branchBox(id) {
+  const data = store.getData();
+  const branch = branchOf(data, id);
+  if (!branch) return null;
+  const s = suggestForBranch(data, id);
+  const others = branch.count - 1;
+  const intro = h("p", { class: "branch-intro" }, "This branch isn’t joined to your tree yet."
+    + (others ? ` ${branch.name} has ${branch.count} people.` : ""));
+  if (!s) {
+    return h("section", { class: "branch-box" }, intro,
+      h("p", { class: "hint" }, "When you find how they join your family, link one person and the whole branch joins."),
+      h("button", { type: "button", class: "btn small with-icon branch-link", onclick: () => link.showLink(id) },
+        link.linkIcon(), "Link to your tree"));
+  }
+  const p = data.people[s.id];
+  const o = data.people[s.otherId];
+  // "Link as her father" (Hasan to Salma), or "Link as his son" (Hasan to Ali).
+  const their = o.gender === "m" ? "his" : o.gender === "f" ? "her" : "their";
+  const btnText = s.id === id ? `Link as ${their} ${roleWord(p, s.role)}` : `Link ${p.first} as ${their} ${roleWord(p, s.role)}`;
+  return h("section", { class: "branch-box" }, intro,
+    h("div", { class: "branch-suggest" },
+      kicker("Possible link"),
+      h("p", { class: "branch-question" }, question(data, s)),
+      h("p", { class: "row-sub" }, s.reason),
+      h("div", { class: "dup-actions" },
+        h("button", { type: "button", class: "btn small with-icon", onclick: () => link.showLink(s.id, { role: s.role, otherId: s.otherId }) },
+          link.linkIcon(), btnText)),
+      h("button", { type: "button", class: "text-btn branch-other", onclick: () => link.showLink(id, { role: "parent" }) }, "Link another way")));
 }
 
 // ---- Children with only one parent added, when that parent has a husband or wife ----
@@ -362,6 +395,7 @@ function missingParentBox(has, missing, kids) {
 
 // ---- One form for every new person ----
 // kind is "me", "parent", "child" or "spouse". anchorId is the person tapped.
+// kind "branch" starts a separate branch: someone not linked to anyone yet.
 
 function showForm(kind, anchorId) {
   const anchor = anchorId ? store.getPerson(anchorId) : null;
@@ -376,7 +410,9 @@ function showForm(kind, anchorId) {
   let former = false;
   let segment = null;
 
-  if (kind === "me") {
+  if (kind === "branch") {
+    segment = makeSegment("Male or female", [["m", "Male"], ["f", "Female"]], null, (v) => { gender = v; update(); });
+  } else if (kind === "me") {
     segment = makeSegment("Are you", [["m", "Male"], ["f", "Female"]], null, (v) => { gender = v; update(); });
   } else if (kind === "child") {
     segment = makeSegment("Son or daughter", [["m", "Son"], ["f", "Daughter"]], "m", (v) => { gender = v; update(); });
@@ -481,8 +517,23 @@ function showForm(kind, anchorId) {
 
   function drawDup() {
     if (kind === "me") return (dupBox.hidden = true);
-    const match = store.findMatches(values()).find((m) => m.id !== anchor.id && !dismissed.has(m.id));
+    const match = store.findMatches(values()).find((m) => m.id !== anchor?.id && !dismissed.has(m.id));
     if (!match) return (dupBox.hidden = true);
+    if (kind === "branch") {
+      // Starting a branch with someone who is already in: open them instead of adding a copy.
+      const desc = [store.parentsLabel(match) || "Parents not added yet", relLabel(match.id) || "Not yet connected to you"].join(" · ");
+      dupBox.hidden = false;
+      dupBox.replaceChildren(
+        kicker("Already in the tree"),
+        h("p", { class: "dup-name" }, store.fullName(match)),
+        h("p", { class: "row-sub" }, desc),
+        h("p", {}, "Is this a different person with the same name?"),
+        h("div", { class: "dup-actions" },
+          h("button", { type: "button", class: "text-btn", onclick: () => { dismissed.add(match.id); drawDup(); } }, "Yes, someone else"),
+          h("button", { type: "button", class: "text-btn plain", onclick: () => { closeSheet(); showPerson(match.id, { centre: true }); } },
+            `No, open ${match.first}`)));
+      return;
+    }
     const problem = linkProblem(match);
     const desc = [store.parentsLabel(match), relLabel(match.id), problem].filter(Boolean).join(" · ");
     dupBox.hidden = false;
@@ -525,6 +576,11 @@ function showForm(kind, anchorId) {
 
   function drawRelate() {
     if (!relateBox) return;
+    if (kind === "branch") {
+      relWords.textContent = "Not connected to you yet";
+      relSide.textContent = "Link the branch to your tree once you find the connection.";
+      return;
+    }
     // A copy of the tree with the new person in it, linked the way Save would link them.
     const data = store.getData();
     const id = "new-person";
@@ -550,7 +606,7 @@ function showForm(kind, anchorId) {
   }
 
   // ---- Title, save button and what it says ----
-  const titles = { me: "Add yourself", parent: "Add a parent", child: "Add a child", spouse: "Add a spouse" };
+  const titles = { me: "Add yourself", parent: "Add a parent", child: "Add a child", spouse: "Add a spouse", branch: "New branch" };
   const saveBtn = h("button", { type: "submit", class: "btn small", form: "person-form" }, "Add");
   const error = h("p", { class: "error", role: "alert" });
 
@@ -558,6 +614,7 @@ function showForm(kind, anchorId) {
     kidsLabel.textContent = gender === "m" ? "Also the father of" : gender === "f" ? "Also the mother of" : "Also the parent of";
     if (kind === "child") saveBtn.textContent = gender === "f" ? "Add daughter" : "Add son";
     else if (kind === "parent") saveBtn.textContent = gender === "f" ? "Add mother" : "Add father";
+    else if (kind === "branch") saveBtn.textContent = "Start branch";
     else saveBtn.textContent = "Add";
     saveBtn.disabled = !first.input.value.trim() || !gender;
     drawDup();
@@ -570,6 +627,7 @@ function showForm(kind, anchorId) {
     parent: ["New parent", "Parent of " + anchorName],
     child: ["New child", "Child of " + anchorName],
     spouse: ["New spouse", spouseOf + anchorName],
+    branch: ["Separate branch", "Not linked to anyone yet. Add their family around them, then link the branch to your tree once you find the connection."],
   }[kind];
 
   // ---- Saving ----
@@ -579,6 +637,7 @@ function showForm(kind, anchorId) {
       const newId = store.change(() => {
         const id = existingId || store.addPerson(values()).id;
         if (kind === "me") store.setMe(id);
+        else if (kind === "branch") { /* not linked to anyone yet */ }
         else if (kind === "parent") {
           store.linkParent(id, anchor.id);
           if (marry?.checked && !store.checkSpouseLink(id, parents[0].id)) store.linkSpouse(parents[0].id, id);
@@ -593,11 +652,13 @@ function showForm(kind, anchorId) {
       }, (id) => {
         const name = store.fullName(store.getPerson(id));
         if (kind === "me") return { message: "You were added. Welcome to your tree." };
+        if (kind === "branch") return { message: `${name} was added as a separate branch.` };
         if (existingId) return { message: `${name} was linked to ${anchor.first}.` };
         return { message: `${name} was added.` };
       });
       closeSheet();
-      if (kind !== "me") {
+      if (kind === "branch") showPerson(newId, { centre: true });
+      else if (kind !== "me") {
         // Someone added inside a folded branch: open it, so they show.
         if (chart && newId && !chart.has(newId)) revealPerson(newId);
         showPerson(anchor.id, { move: false });
@@ -647,8 +708,12 @@ document.querySelector(".top").append(
   h("button", { class: "finder-open", onclick: () => (finder.isOpen() ? closePanel() : openFinder()) },
     finderIcon(), h("span", {}, "Relationship finder")));
 undo.init();
+// After linking a branch: show the person who was linked. With the relationship finder open,
+// it stays open and now shows the answer.
+link.init({ onLinked: (id) => { if (chart && !finder.isOpen()) showPerson(id, { centre: true }); } });
 backup.init({
   onFinder: openFinder,
+  onBranch: () => { if (store.getMe()) showForm("branch"); },
   // A new tree came in from a file: draw it fresh and centre on "me".
   onImported: () => {
     finder.close();
