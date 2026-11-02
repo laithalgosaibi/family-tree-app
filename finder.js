@@ -320,7 +320,7 @@ function notConnected(data, from, to) {
   const otherIds = g.groupOf.get(other).ids;
   const s = suggestLinks(data, branch.ids, otherIds)[0];
   const out = [h("p", { class: "finder-back" },
-    `${fullName(data.people[inBranch])} is in ${branch.name.replace(/^The/, "the")}, which isn’t joined to your tree yet.`)];
+    `${fullName(data.people[inBranch])} is in a separate branch, which isn’t joined to your tree yet.`)];
   if (s) {
     out.push(h("div", { class: "branch-suggest finder-suggest" },
       kicker("Possible link"),

@@ -36,32 +36,18 @@ export function groups(data) {
   return { groupOf, groups: list };
 }
 
-// "The Azar branch": the family name most of them share. When two names are
-// equally common, the name of the first person added wins.
-export function branchName(data, ids) {
-  const order = [...ids].sort(); // ids start with the time they were added
-  const counts = new Map();
-  for (const id of order) {
-    const name = data.people[id]?.family;
-    if (name) counts.set(name, (counts.get(name) || 0) + 1);
-  }
-  let best = null;
-  for (const [name, n] of counts) if (!best || n > counts.get(best)) best = name;
-  return best ? `The ${best} branch` : "A separate branch";
-}
-
 // The separate branch a person is in, or null when they are joined to you.
-// { ids, name, count }
+// { ids, count }
 export function branchOf(data, id, g = groups(data)) {
   const group = g.groupOf.get(id);
   if (!group || group.hasMe) return null;
-  return { ids: group.ids, name: branchName(data, group.ids), count: group.ids.length };
+  return { ids: group.ids, count: group.ids.length };
 }
 
 // Every separate branch, biggest first.
 export function allBranches(data) {
   return groups(data).groups.filter((x) => !x.hasMe)
-    .map((x) => ({ ids: x.ids, name: branchName(data, x.ids), count: x.ids.length }))
+    .map((x) => ({ ids: x.ids, count: x.ids.length }))
     .sort((a, b) => b.count - a.count);
 }
 
