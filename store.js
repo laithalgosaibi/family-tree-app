@@ -6,8 +6,11 @@
 //   parents: [ { parent, child } ]           one entry per parent-child link
 //   spouses: [ { a, b, former } ]            one entry per marriage, in the order added;
 //                                            former is true after a divorce or a death
-//   meId:    the id of the person the app is centred on (Laith)
+//   meId:    the id of the person who is "you", or null when nobody has said which one they are.
+//            It can be set or changed from anyone's card.
 // Every other relationship (sibling, cousin, uncle) is worked out from these.
+
+import { homeId } from "./layout.js";
 
 const STORAGE_KEY = "familyTree.v1";
 
@@ -50,7 +53,12 @@ function clean(text) {
 // ---- Reading ----
 
 export function getMe() {
-  return tree.meId ? tree.people[tree.meId] : null;
+  return tree.meId ? tree.people[tree.meId] || null : null;
+}
+
+// True when there is at least one person in the tree.
+export function hasPeople() {
+  return Object.keys(tree.people).length > 0;
 }
 
 // The whole tree, for drawing the chart. Read it, do not change it.
@@ -178,9 +186,10 @@ export function addPerson({ first, father, family, gender }) {
   return person;
 }
 
-// Use inside change(), which saves.
+// Says which person is you. null means nobody is. Use inside change(), which saves.
 export function setMe(id) {
-  tree.meId = id;
+  if (id && !tree.people[id]) throw new Error("This person is no longer in the tree.");
+  tree.meId = id || null;
 }
 
 export function linkParent(parentId, childId) {
@@ -232,12 +241,14 @@ export function linkCounts(id) {
   return { parents: parentsOf(id).length, spouses: spousesOf(id).length, children: childrenOf(id).length };
 }
 
-// Everyone joined to "me" through any chain of links, leaving out `withoutId`.
+// Everyone joined to the main tree (you, or the first person when nobody is you)
+// through any chain of links, leaving out `withoutId`.
 function connectedToMe(withoutId) {
   const seen = new Set();
-  if (!tree.meId || tree.meId === withoutId) return seen;
-  const queue = [tree.meId];
-  seen.add(tree.meId);
+  const home = homeId(tree);
+  if (!home || home === withoutId) return seen;
+  const queue = [home];
+  seen.add(home);
   while (queue.length) {
     const id = queue.shift();
     for (const n of [...parentsOf(id), ...childrenOf(id), ...spousesOf(id)]) {
@@ -251,6 +262,7 @@ function connectedToMe(withoutId) {
 
 // The people who are joined to "me" now, but would not be if `id` was deleted.
 export function cutOffBy(id) {
+  if (id === homeId(tree)) return []; // only happens when nobody is you: the next person becomes the centre
   const now = connectedToMe(null);
   const after = connectedToMe(id);
   return [...now].filter((x) => x !== id && !after.has(x)).map((x) => tree.people[x]);
@@ -258,7 +270,7 @@ export function cutOffBy(id) {
 
 // Removes a person and every link to them. The people they were linked to stay.
 export function deletePerson(id) {
-  if (id === tree.meId) throw new Error("You are the centre of the tree, so you cannot be deleted.");
+  if (id === tree.meId) throw new Error("You cannot delete yourself. If this is not you, use This isn’t me on the card first.");
   if (!tree.people[id]) throw new Error("This person is no longer in the tree.");
   delete tree.people[id];
   tree.parents = tree.parents.filter((l) => l.parent !== id && l.child !== id);
@@ -376,7 +388,7 @@ export const CHANGES_BEFORE_REMINDER = 10;
 // or a week has passed and something changed in that time. Whichever comes first.
 export function reminderDue(now = Date.now()) {
   const info = readBackupInfo();
-  if (!tree.meId || info.changes === 0 || now < info.snoozeUntil) return false;
+  if (!hasPeople() || info.changes === 0 || now < info.snoozeUntil) return false;
   if (info.changes >= CHANGES_BEFORE_REMINDER) return true;
   const since = info.lastBackup || info.firstChange || now;
   return now - since >= WEEK;
@@ -430,7 +442,6 @@ export function readFile(text) {
 
   const count = Object.keys(people).length;
   if (!count) throw new Error("This backup has nobody in it, so there is nothing to import.");
-  if (!safe.meId) throw new Error("This backup does not say who “you” are, so it cannot be opened.");
   return { tree: safe, exportedAt: data.exportedAt || null, device: data.device || null, count };
 }
 

@@ -88,14 +88,15 @@ const wide = window.matchMedia("(min-width: 700px)");
 
 function renderHome() {
   const me = store.getMe();
-  if (!me) {
+  if (!store.hasPeople()) {
     chart = null;
     panelId = null;
     document.body.classList.remove("chart-mode");
     return renderFirstOpen();
   }
   if (!chart) return buildChart();
-  redraw(panelId || me.id);
+  drawCentreBtn();
+  redraw(panelId || me?.id);
   if (finder.isOpen()) return finder.refresh();
   if (panelId && chart.has(panelId)) showPerson(panelId, { move: false });
   else if (panelId) closePanel();
@@ -117,7 +118,7 @@ function drawFoldNote() {
 
 function expandAll() {
   fold.expandAll();
-  redraw(panelId || store.getMe().id);
+  redraw(panelId || store.getMe()?.id);
 }
 
 // Fold or open the branch under a person. They stay in the same spot on screen.
@@ -146,17 +147,26 @@ function revealAll(ids) {
 // ---- The relationship finder (finder.js), in the same panel as the person card ----
 
 function openFinder() {
-  if (!chart || !store.getMe()) return;
+  if (!chart || !store.hasPeople()) return;
   const to = panelId; // the person whose card is open, if any, starts in the To box
   panelId = null;
   chart.select(null);
   finder.open({ to });
 }
 
+// Centre on me. When nobody is set as you, the same button fits the whole tree on screen.
 function centreOnMe() {
   const me = store.getMe();
+  if (!me) return chart.fitTo(Object.keys(store.getData().people));
   revealPerson(me.id);
   chart.centreOn(me.id);
+}
+
+let centreBtn = null;
+function drawCentreBtn() {
+  const label = store.getMe() ? "Centre on me" : "Whole tree";
+  centreBtn.setAttribute("aria-label", label);
+  centreBtn.querySelector(".centre-text").textContent = label;
 }
 
 function buildChart() {
@@ -170,8 +180,9 @@ function buildChart() {
       h("button", { class: "ctrl zoom-out", "aria-label": "Zoom out", onclick: () => chart.zoomBy(1 / 1.25) }, "−"),
       zoomText,
       h("button", { class: "ctrl zoom-in", "aria-label": "Zoom in", onclick: () => chart.zoomBy(1.25) }, "+")),
-    h("button", { class: "ctrl centre", "aria-label": "Centre on me", onclick: centreOnMe },
+    centreBtn = h("button", { class: "ctrl centre", "aria-label": "Centre on me", onclick: centreOnMe },
       targetIcon(), h("span", { class: "centre-text" }, "Centre on me")));
+  drawCentreBtn();
   const hint = h("p", { class: "chart-hint" }, "Drag to move · pinch or ⌘-scroll to zoom");
 
   foldNote = h("div", { class: "fold-note", role: "status", hidden: true });
@@ -194,9 +205,11 @@ function buildChart() {
   chart.update(store.getData());
   drawFoldNote();
   chart.setScale(wide.matches ? 0.9 : 0.75);
+  const meId = store.getMe()?.id;
   // If you are inside a folded branch, start on the person it is folded under.
-  const meId = store.getMe().id;
-  chart.centreOn(fold.shownFoldFor(store.getData(), meId) || meId, { animate: false });
+  if (meId) chart.centreOn(fold.shownFoldFor(store.getData(), meId) || meId, { animate: false });
+  // Nobody is set as you: show the whole tree, centred on no one.
+  else chart.fitTo(Object.keys(store.getData().people), { animate: false });
 
   // The panel covers part of the chart, so the controls move out of its way.
   new ResizeObserver(() => {
@@ -262,6 +275,7 @@ function renderFirstOpen() {
         h("h2", {}, "Every tree starts with one person"),
         h("p", {}, "Add yourself first. Parents, children and partners branch out from you, one at a time."),
         h("button", { class: "btn wide", onclick: () => showForm("me") }, "Add yourself"),
+        h("button", { class: "text-btn plain center-btn", onclick: () => showForm("first") }, "Skip, start with someone else"),
         h("button", { class: "text-btn plain center-btn", onclick: backup.pickFile }, "Import a family file"),
         h("p", { class: "hint center" }, "Already have a tree on another device? Export it there, then import the .family file here."))));
   store.askToKeepData();
@@ -276,7 +290,8 @@ function showPerson(id, { centre = false, move = true } = {}) {
   if (!p) return closePanel();
   finder.close(); // tapping someone on the chart while the finder shows its line opens their card
   if (!chart.has(id)) { revealPerson(id); centre = true; }
-  const isMe = p.id === store.getMe()?.id;
+  const me = store.getMe();
+  const isMe = p.id === me?.id;
   const parents = store.parentsOf(id);
   const spouses = store.spousesOf(id);
   const children = store.childrenOf(id).sort(byName);
@@ -298,7 +313,7 @@ function showPerson(id, { centre = false, move = true } = {}) {
     h("div", { class: "card-top" },
       h("button", { class: "text-btn", onclick: () => edit.showEdit(id) }, "Edit"),
       h("button", { class: "icon-btn", "aria-label": "Close", onclick: closePanel }, "×")),
-    kicker(isMe ? "You" : rel.kind === "none" ? "Not yet connected to you" : "Your " + rel.words),
+    cardKicker(id, isMe, me, rel),
     h("h2", { class: "person-name" }, store.fullName(p)),
     parents.length > 0 && h("p", { class: "person-parents" }, store.parentsLabel(p, { full: true })),
     side && h("p", { class: "person-side" }, side),
@@ -311,18 +326,41 @@ function showPerson(id, { centre = false, move = true } = {}) {
       h("button", { class: "action", onclick: () => showForm("spouse", id) },
         h("span", { class: "action-icon", "aria-hidden": "true" }, "↔"), "Add spouse")),
     parents.length >= 2 && h("p", { class: "hint" }, "Both parents are added."),
+    !me && h("section", { class: "me-box" },
+      h("p", { class: "hint" }, "Is this you? Say so, and everyone’s card will show how they are related to you."),
+      h("button", { class: "btn small", onclick: () => setMe(id) }, "This is me")),
     !isMe && rel.path.length > 1 && connectionSection(rel),
     rel.kind === "none" && branchBox(id),
     group("Parents", parents, parentWord),
     group(spouses.length > 1 ? "Spouses" : "Spouse", spouses, (s) => store.spouseWord(id, s.id)),
     group("Children", children, (c) => store.parentsLabel(c) || childWord(c)),
     ...missingParentBoxes(p, spouses),
+    me && h("div", { class: "me-switch" }, isMe
+      ? h("button", { class: "text-btn plain", onclick: () => setMe(null) }, "This isn’t me")
+      : h("button", { class: "text-btn plain", onclick: () => setMe(id) }, "This is me")),
   ].filter(Boolean));
   if (!samePerson) panel.scrollTop = 0;
   document.body.style.setProperty("--panel-h", panel.offsetHeight + "px");
   document.body.style.setProperty("--panel-w", panel.offsetWidth + "px");
   chart.select(id);
   if (move) chart.centreOn(id, { onlyIfHidden: !centre });
+}
+
+// The small line above the name: "You", "Your aunt", "Not yet connected to you".
+// When nobody is set as you there is no "your", so it only says when someone is in a separate branch.
+function cardKicker(id, isMe, me, rel) {
+  if (isMe) return kicker("You");
+  if (!me) return branchOf(store.getData(), id) ? kicker("Not yet connected") : null;
+  return kicker(rel.kind === "none" ? "Not yet connected to you" : "Your " + rel.words);
+}
+
+// "This is me" on anyone's card, or "This isn’t me" on yours. Undo takes it back.
+function setMe(id) {
+  const p = id && store.getPerson(id);
+  store.change(() => store.setMe(id), p
+    ? { message: `${store.fullName(p)} is now you.`, detail: "Everyone’s card now says how they are related to you.", offerUndo: true }
+    : { message: "Nobody is set as you now.", detail: "Tap anyone and choose This is me to set it again.", offerUndo: true });
+  if (p) chart.centreOn(id, { onlyIfHidden: true });
 }
 
 // ---- Someone in a separate branch: how to join it to the tree ----
@@ -395,6 +433,7 @@ function missingParentBox(has, missing, kids) {
 
 // ---- One form for every new person ----
 // kind is "me", "parent", "child" or "spouse". anchorId is the person tapped.
+// kind "first" is the first person in a new tree, for someone who skipped adding themselves.
 // kind "branch" starts a separate branch: someone not linked to anyone yet.
 
 function showForm(kind, anchorId) {
@@ -410,7 +449,7 @@ function showForm(kind, anchorId) {
   let former = false;
   let segment = null;
 
-  if (kind === "branch") {
+  if (kind === "branch" || kind === "first") {
     segment = makeSegment("Male or female", [["m", "Male"], ["f", "Female"]], null, (v) => { gender = v; update(); });
   } else if (kind === "me") {
     segment = makeSegment("Are you", [["m", "Male"], ["f", "Female"]], null, (v) => { gender = v; update(); });
@@ -516,12 +555,13 @@ function showForm(kind, anchorId) {
     : null;
 
   function drawDup() {
-    if (kind === "me") return (dupBox.hidden = true);
+    if (kind === "me" || kind === "first") return (dupBox.hidden = true);
     const match = store.findMatches(values()).find((m) => m.id !== anchor?.id && !dismissed.has(m.id));
     if (!match) return (dupBox.hidden = true);
     if (kind === "branch") {
       // Starting a branch with someone who is already in: open them instead of adding a copy.
-      const desc = [store.parentsLabel(match) || "Parents not added yet", relLabel(match.id) || "Not yet connected to you"].join(" · ");
+      const desc = [store.parentsLabel(match) || "Parents not added yet",
+        relLabel(match.id) || (store.getMe() ? "Not yet connected to you" : "")].filter(Boolean).join(" · ");
       dupBox.hidden = false;
       dupBox.replaceChildren(
         kicker("Already in the tree"),
@@ -571,7 +611,8 @@ function showForm(kind, anchorId) {
   // ---- How they will relate to you, before saving ----
   const relWords = h("p", { class: "relate-words" });
   const relSide = h("p", { class: "person-side" });
-  const relateBox = kind === "me" ? null
+  // Hidden when nobody is set as you, as there is no "you" to relate them to.
+  const relateBox = kind === "me" || kind === "first" || !store.getMe() ? null
     : h("div", { class: "relate" }, kicker("How they’ll relate to you"), relWords, relSide);
 
   function drawRelate() {
@@ -606,7 +647,7 @@ function showForm(kind, anchorId) {
   }
 
   // ---- Title, save button and what it says ----
-  const titles = { me: "Add yourself", parent: "Add a parent", child: "Add a child", spouse: "Add a spouse", branch: "New branch" };
+  const titles = { me: "Add yourself", first: "Add the first person", parent: "Add a parent", child: "Add a child", spouse: "Add a spouse", branch: "New branch" };
   const saveBtn = h("button", { type: "submit", class: "btn small", form: "person-form" }, "Add");
   const error = h("p", { class: "error", role: "alert" });
 
@@ -624,6 +665,7 @@ function showForm(kind, anchorId) {
   const spouseOf = gender === "m" ? "Husband of " : gender === "f" ? "Wife of " : "Spouse of ";
   const context = {
     me: ["You", "Every tree starts with one person"],
+    first: ["First person", "Start with anyone in the family. If you are in this tree, you can say which person is you later, from their card."],
     parent: ["New parent", "Parent of " + anchorName],
     child: ["New child", "Child of " + anchorName],
     spouse: ["New spouse", spouseOf + anchorName],
@@ -637,7 +679,7 @@ function showForm(kind, anchorId) {
       const newId = store.change(() => {
         const id = existingId || store.addPerson(values()).id;
         if (kind === "me") store.setMe(id);
-        else if (kind === "branch") { /* not linked to anyone yet */ }
+        else if (kind === "branch" || kind === "first") { /* not linked to anyone yet */ }
         else if (kind === "parent") {
           store.linkParent(id, anchor.id);
           if (marry?.checked && !store.checkSpouseLink(id, parents[0].id)) store.linkSpouse(parents[0].id, id);
@@ -652,13 +694,14 @@ function showForm(kind, anchorId) {
       }, (id) => {
         const name = store.fullName(store.getPerson(id));
         if (kind === "me") return { message: "You were added. Welcome to your tree." };
+        if (kind === "first") return { message: `${name} was added. Tap them to add their family.` };
         if (kind === "branch") return { message: `${name} was added as a separate branch.` };
         if (existingId) return { message: `${name} was linked to ${anchor.first}.` };
         return { message: `${name} was added.` };
       });
       closeSheet();
       if (kind === "branch") showPerson(newId, { centre: true });
-      else if (kind !== "me") {
+      else if (kind !== "me" && kind !== "first") {
         // Someone added inside a folded branch: open it, so they show.
         if (chart && newId && !chart.has(newId)) revealPerson(newId);
         showPerson(anchor.id, { move: false });
@@ -713,7 +756,7 @@ undo.init();
 link.init({ onLinked: (id) => { if (chart && !finder.isOpen()) showPerson(id, { centre: true }); } });
 backup.init({
   onFinder: openFinder,
-  onBranch: () => { if (store.getMe()) showForm("branch"); },
+  onBranch: () => { if (store.hasPeople()) showForm("branch"); },
   // A new tree came in from a file: draw it fresh and centre on "me".
   onImported: () => {
     finder.close();

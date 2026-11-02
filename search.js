@@ -155,7 +155,8 @@ function resultRow(it, extra) {
   },
     h("span", { class: "result-top" },
       h("span", { class: "result-name" }, fullName(p)),
-      h("span", { class: "result-rel" + (it.rel.kind === "none" ? " none" : "") }, relShort(it.rel))),
+      // Nobody set as you: there is nothing to say what they are to you.
+      store.getMe() && h("span", { class: "result-rel" + (it.rel.kind === "none" ? " none" : "") }, relShort(it.rel))),
     extra || h("span", { class: "result-sub" }, store.parentsLabel(p) || "Parents not added yet"),
     it.spelled.length > 0 && h("span", { class: "tag plain-tag" }, "Spelled " + it.spelled.join(" ")));
   rows.push({ id: it.id, el });
@@ -202,10 +203,11 @@ function drawPreview(id) {
   const word = p.gender === "m" ? "Son of" : p.gender === "f" ? "Daughter of" : "Child of";
   const relOf = (x) => {
     const r = relationship(data, data.meId, x.id);
+    if (!data.meId) return "";
     return r.kind === "self" ? "You" : r.kind === "none" ? "Not connected to you" : "Your " + r.words;
   };
   preview.replaceChildren(...[
-    kicker(rel.kind === "self" ? "You" : rel.kind === "none" ? "Not connected to you" : rel.words),
+    data.meId && kicker(rel.kind === "self" ? "You" : rel.kind === "none" ? "Not connected to you" : rel.words),
     h("h2", { class: "preview-name" }, fullName(p)),
     h("p", { class: "label-caps" }, word),
     parents.length

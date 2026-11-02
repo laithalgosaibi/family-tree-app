@@ -18,8 +18,18 @@ const ROW_GAP = 80; // between rows, where the lines run
 const ROW_H = BOX_H + ROW_GAP;
 const PART_GAP = 200; // between parts of the tree that are not connected yet
 
+// The person the main tree is built around: you, or when nobody is set as you,
+// the first person added who is still in the tree. Everyone not joined to them
+// is in a separate branch.
+export function homeId(data) {
+  if (data.meId && data.people[data.meId]) return data.meId;
+  for (const id in data.people) return id;
+  return null;
+}
+
 export function layoutTree(data) {
-  const { people, meId } = data;
+  const { people } = data;
+  const home = homeId(data);
   const ids = Object.keys(people);
   const exists = (id) => !!people[id];
 
@@ -44,7 +54,7 @@ export function layoutTree(data) {
   // ---- Split into parts that are connected (normally just one) ----
   const partOf = new Map();
   const parts = [];
-  const starts = meId && exists(meId) ? [meId, ...ids] : ids;
+  const starts = home ? [home, ...ids] : ids;
   for (const start of starts) {
     if (partOf.has(start)) continue;
     const part = [];

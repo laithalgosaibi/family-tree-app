@@ -44,11 +44,12 @@ export const isOpen = () => !!state;
 
 // Opens the finder. With no `to`, it starts by asking who to compare with.
 export function open({ from, to } = {}) {
+  if (!store.hasPeople()) return;
   const me = store.getMe()?.id;
-  if (!me) return;
-  from = from && store.getPerson(from) ? from : me;
+  if (!me && !from && to) [from, to] = [to, null]; // nobody is you: the open card's person starts in From
+  from = from && store.getPerson(from) ? from : me || null;
   to = to && to !== from && store.getPerson(to) ? to : null;
-  state = { from, to, picking: to ? null : "to", query: "", mini: false };
+  state = { from, to, picking: !from ? "from" : to ? null : "to", query: "", mini: false };
   document.body.classList.add("finder-on");
   panel.hidden = false;
   draw();
@@ -70,7 +71,7 @@ export function refresh() {
   if (!state) return;
   if (!store.getPerson(state.from)) state.from = store.getMe()?.id;
   if (state.to && !store.getPerson(state.to)) state.to = null;
-  if (!state.from) return hooks.onClose();
+  if (!state.from && !store.hasPeople()) return hooks.onClose();
   draw();
   follow({ move: false });
 }
@@ -99,7 +100,7 @@ function set(slot, id) {
 }
 
 function swap() {
-  if (!state.to) return;
+  if (!state.to || !state.from) return;
   [state.from, state.to] = [state.to, state.from];
   draw();
   follow({ move: false });
@@ -110,7 +111,7 @@ function follow({ move = true } = {}) {
   const chart = hooks.chart();
   if (!chart || !state) return;
   const { from, to } = state;
-  if (!to || from === to) return chart.setPair(null);
+  if (!from || !to || from === to) return chart.setPair(null);
   const rel = relationship(store.getData(), from, to);
   const ids = rel.path.length ? rel.path : [from, to];
   hooks.reveal(ids);
@@ -183,7 +184,7 @@ function pairCard(data) {
       slot("from", state.from),
       h("span", { class: "pair-rule", "aria-hidden": "true" }),
       slot("to", state.to),
-      h("button", { type: "button", class: "swap", "aria-label": "Swap From and To", disabled: !state.to, onclick: swap }, swapIcon())),
+      h("button", { type: "button", class: "swap", "aria-label": "Swap From and To", disabled: !state.to || !state.from, onclick: swap }, swapIcon())),
     wide.matches && mouse.matches && h("p", { class: "pair-hint" }, "Click anyone on the chart to set To. ⌥-click sets From."));
 }
 
@@ -238,14 +239,14 @@ function results(data) {
     return h("button", { type: "button", class: "result", onclick: () => set(state.picking, id) },
       h("span", { class: "result-top" },
         h("span", { class: "result-name" }, fullName(p)),
-        h("span", { class: "result-rel" + (rel.kind === "none" ? " none" : "") }, relText)),
+        data.meId && h("span", { class: "result-rel" + (rel.kind === "none" ? " none" : "") }, relText)),
       h("span", { class: "result-sub" }, extraSub || store.parentsLabel(p) || "Parents not added yet"));
   };
   if (!query) {
     const quick = [];
     // A short cut back to you, when you are not already in the other box.
     const other = state.picking === "from" ? state.to : state.from;
-    if (data.meId !== other) quick.push(row(data.meId));
+    if (data.meId && data.meId !== other) quick.push(row(data.meId));
     return [h("p", { class: "search-empty" }, "Type a first name, father’s name or family name."), ...quick];
   }
   const found = search(data, query);
@@ -265,6 +266,7 @@ const theirWord = (p) => (p.gender === "m" ? "his" : p.gender === "f" ? "her" : 
 
 function answer(data) {
   const { from, to } = state;
+  if (!from) return h("p", { class: "empty finder-empty" }, "Choose the first person, in the From box.");
   if (!to) return h("p", { class: "empty finder-empty" }, "Choose who to compare with, in the To box.");
   if (from === to) return h("p", { class: "empty finder-empty" }, "From and To are the same person. Choose someone else for one of them.");
 

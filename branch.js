@@ -8,9 +8,11 @@
 // No screens here, so it can be checked on its own. The linking screen is in link.js.
 
 import { norm, skeleton } from "./find.js";
+import { homeId } from "./layout.js";
 
 // Everyone joined to each other by any chain of links, as groups.
-// Returns { groupOf: Map(id -> group), groups: [{ ids, hasMe }] }.
+// Returns { groupOf: Map(id -> group), groups: [{ ids, isMain }] }.
+// isMain marks the main tree: the group you are in (see homeId when nobody is you).
 export function groups(data) {
   const near = new Map(Object.keys(data.people).map((id) => [id, []]));
   const join = (a, b) => { if (near.has(a) && near.has(b)) { near.get(a).push(b); near.get(b).push(a); } };
@@ -19,16 +21,17 @@ export function groups(data) {
 
   const groupOf = new Map();
   const list = [];
-  const starts = data.meId && near.has(data.meId) ? [data.meId, ...near.keys()] : [...near.keys()];
+  const home = homeId(data);
+  const starts = home ? [home, ...near.keys()] : [...near.keys()];
   for (const start of starts) {
     if (groupOf.has(start)) continue;
-    const group = { ids: [], hasMe: false };
+    const group = { ids: [], isMain: false };
     groupOf.set(start, group);
     const queue = [start];
     while (queue.length) {
       const id = queue.shift();
       group.ids.push(id);
-      if (id === data.meId) group.hasMe = true;
+      if (id === home) group.isMain = true;
       for (const n of near.get(id)) if (!groupOf.has(n)) { groupOf.set(n, group); queue.push(n); }
     }
     list.push(group);
@@ -40,13 +43,13 @@ export function groups(data) {
 // { ids, count }
 export function branchOf(data, id, g = groups(data)) {
   const group = g.groupOf.get(id);
-  if (!group || group.hasMe) return null;
+  if (!group || group.isMain) return null;
   return { ids: group.ids, count: group.ids.length };
 }
 
 // Every separate branch, biggest first.
 export function allBranches(data) {
-  return groups(data).groups.filter((x) => !x.hasMe)
+  return groups(data).groups.filter((x) => !x.isMain)
     .map((x) => ({ ids: x.ids, count: x.ids.length }))
     .sort((a, b) => b.count - a.count);
 }
@@ -95,9 +98,9 @@ export function suggestLinks(data, fromIds, toIds) {
       const pb = data.people[b];
       if (!pb || g.groupOf.get(a) === g.groupOf.get(b)) continue;
       const down = couldBeFather(data, pa, pb);
-      if (down) out.push({ id: a, otherId: b, role: "parent", reason: down.reason, exact: down.exact, mine: !!g.groupOf.get(b)?.hasMe });
+      if (down) out.push({ id: a, otherId: b, role: "parent", reason: down.reason, exact: down.exact, mine: !!g.groupOf.get(b)?.isMain });
       const up = couldBeFather(data, pb, pa);
-      if (up) out.push({ id: a, otherId: b, role: "child", reason: up.reason, exact: up.exact, mine: !!g.groupOf.get(b)?.hasMe });
+      if (up) out.push({ id: a, otherId: b, role: "child", reason: up.reason, exact: up.exact, mine: !!g.groupOf.get(b)?.isMain });
     }
   }
   return out.sort((x, y) => (y.mine - x.mine) || (y.exact - x.exact));

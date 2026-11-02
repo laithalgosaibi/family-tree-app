@@ -28,6 +28,7 @@ Plain web files, no build step, so any change is live as soon as it is saved:
 Everything is saved in the browser on the device being used. Nothing is sent anywhere.
 To move the tree between devices, or keep a safe copy, use the ··· button: Export a backup, then Import a file on the other device.
 The ··· button also has Undo last change. Undo remembers the last 30 changes while the app is open.
+When the app opens with nothing saved, it asks you to add yourself first. You can skip that and start with anyone instead. Then the chart shows the whole tree without centring on anyone, and the "your cousin" wording is hidden until you tap someone and choose This is me. Your own card has This isn't me, and anyone else's card has This is me, to change it later.
 Tap anyone to see how they are related to you, which side of the family they are on, and every step between you.
 Search by name with the magnifying glass on a phone, or the box at the top left on a Mac (⌘F). Other spellings match too, so Yusuf finds Yousef. When two people share a name, both sets of parents are shown so you can tell them apart.
 The relationship finder shows how any two people are related, both ways round, with the shared ancestors and every step between them. On a Mac it is the button at the top right (click a box to set To, ⌥-click to set From). On a phone it is in the ··· menu.

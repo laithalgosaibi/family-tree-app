@@ -187,7 +187,7 @@ export function createChart(container, { onSelect, onEmpty, onFold, insets }) {
     const frames = [];
     for (const part of layout.parts) {
       const group = g.groupOf.get(part.ids[0]);
-      if (!group || group.hasMe) continue;
+      if (!group || group.isMain) continue;
       const pad = 22;
       const count = group.ids.length;
       const frame = document.createElement("div");
