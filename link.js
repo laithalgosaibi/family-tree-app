@@ -74,7 +74,7 @@ export function showLink(id, { role = null, otherId = null } = {}) {
   const linkBtn = h("button", { type: "button", class: "btn wide with-icon link-btn", onclick: save });
 
   const groupInfo = groups(data);
-  const mine = (x) => !!groupInfo.groupOf.get(x)?.hasMe;
+  const mine = (x) => !!groupInfo.groupOf.get(x)?.isMain;
 
   // Why `otherId` cannot be linked this way, or null.
   function problem(otherId) {
@@ -86,7 +86,9 @@ export function showLink(id, { role = null, otherId = null } = {}) {
   function pickRow(otherId, reason) {
     const o = data.people[otherId];
     const rel = relationship(data, data.meId, otherId);
-    const relText = rel.kind === "self" ? "You" : rel.kind === "none" ? "In another branch" : "Your " + rel.words;
+    const relText = rel.kind === "self" ? "You"
+      : !data.meId ? (mine(otherId) ? "In the tree" : "In another branch") // nobody is set as you
+      : rel.kind === "none" ? "In another branch" : "Your " + rel.words;
     const picked = state.otherId === otherId;
     const why = problem(otherId);
     return h("button", {
@@ -173,7 +175,7 @@ export function showLink(id, { role = null, otherId = null } = {}) {
     const otherBranch = branchOf(data, o.id, groupInfo);
     const joins = !otherBranch
       ? (branch.count === 1 ? `${p.first} joins your tree.` : `All ${people(branch.count)} in this branch join your tree.`)
-      : `This branch and ${o.first}’s branch become one. It is still not connected to you.`;
+      : `This branch and ${o.first}’s branch become one. It is still not connected to ${data.meId ? "you" : "the rest of the tree"}.`;
 
     const extra = otherParent();
     let extraEl = null;
@@ -230,7 +232,7 @@ export function showLink(id, { role = null, otherId = null } = {}) {
       h("button", { type: "button", class: "text-btn plain", onclick: closeSheet }, "Cancel"),
       h("h2", { class: "form-title" }, "Link to the tree"),
       h("span", {})),
-    kicker("Not yet connected to you"),
+    kicker(data.meId ? "Not yet connected to you" : "Not yet connected"),
     h("p", { class: "dup-name link-name" }, fullName(p)),
     h("p", { class: "row-sub" }, store.parentsLabel(p, { full: true }) || "Parents not added yet"),
     h("p", { class: "row-sub" }, `In a separate branch · ${people(branch.count)}`),

@@ -47,8 +47,9 @@ const shortDate = (t) => new Date(t).toLocaleDateString("en-GB", { day: "numeric
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 const people = (n) => (n === 1 ? "1 person" : `${n} people`);
 
+// The family name for the file name: yours, or the first person's when nobody is you.
 function familyName() {
-  return store.getMe()?.family || "";
+  return (store.getMe() || store.allPeople()[0])?.family || "";
 }
 
 function fileName() {
@@ -66,7 +67,7 @@ function lastBackupText() {
 // ---- The ··· menu ----
 
 export function showMenu() {
-  const hasTree = !!store.getMe();
+  const hasTree = store.hasPeople();
   const last = store.lastChange();
   const item = (title, sub, onclick, disabled) =>
     h("li", {},
@@ -97,8 +98,7 @@ export function showMenu() {
 // ---- Export ----
 
 export function showExport() {
-  const me = store.getMe();
-  if (!me) return;
+  if (!store.hasPeople()) return;
   const count = store.allPeople().length;
   const name = fileName();
   const error = h("p", { class: "error", role: "alert" });
@@ -221,7 +221,7 @@ function showImportError(name, message) {
 
 function showImportConfirm(name, parsed) {
   const hereCount = store.allPeople().length;
-  const hasTree = !!store.getMe() && hereCount > 0;
+  const hasTree = hereCount > 0;
   const info = store.backupInfo();
   const from = [parsed.device && `Exported from ${parsed.device === "this device" ? "another device" : (/^i/.test(parsed.device) ? "an " : "a ") + parsed.device}`,
     parsed.exportedAt && shortDate(parsed.exportedAt),

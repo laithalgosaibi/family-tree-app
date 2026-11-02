@@ -158,7 +158,7 @@ export function showEdit(id) {
       children.map((x) => linkRow("child:" + x.id, x, store.parentsLabel(x) || childWord(x)))),
     h("p", { class: "hint" }, "To link someone who is already in the tree, close this and use Add parent, Add child or Add spouse, then type their name."),
     isMe
-      ? h("p", { class: "hint delete-hint" }, "You are the centre of the tree, so you cannot be deleted. You can still fix your name.")
+      ? h("p", { class: "hint delete-hint" }, "You cannot delete yourself, but you can fix your name. If this is not you, close this and tap This isn’t me on the card.")
       : h("button", { type: "button", class: "btn wide danger with-icon delete-btn", onclick: () => confirmDelete(id) },
         trashIcon(), `Delete ${p.first}`)));
   update();
@@ -174,14 +174,15 @@ export function confirmDelete(id) {
   const counts = store.linkCounts(id);
   const total = counts.parents + counts.spouses + counts.children;
   const cutOff = store.cutOffBy(id);
+  const joinedTo = store.getMe() ? "joined to you" : "joined to the rest of the tree";
 
   const linksText = total
     ? `This also removes ${his} ${total === 1 ? "link" : "links"} to ${listLinks(counts)}. Those people stay in the tree.`
     : `Nobody else is linked to ${him}, so nothing else changes.`;
   const cutOffText = cutOff.length
     ? h("p", { class: "warn" }, cutOff.length === 1
-      ? `${store.fullName(cutOff[0])} will no longer be joined to you on the chart. They stay in the tree, off to the side.`
-      : `${store.fullName(cutOff[0])} and ${plural(cutOff.length - 1, "other", "others")} will no longer be joined to you on the chart. They stay in the tree, off to the side.`)
+      ? `${store.fullName(cutOff[0])} will no longer be ${joinedTo} on the chart. They stay in the tree, off to the side.`
+      : `${store.fullName(cutOff[0])} and ${plural(cutOff.length - 1, "other", "others")} will no longer be ${joinedTo} on the chart. They stay in the tree, off to the side.`)
     : null;
 
   askToConfirm({
