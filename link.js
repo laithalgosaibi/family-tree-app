@@ -122,7 +122,7 @@ export function showLink(id, { role = null, otherId = null } = {}) {
         .filter((x) => !inBranch.has(x));
       // People in your tree first.
       ids.sort((a, b) => mine(b) - mine(a));
-      if (!ids.length) rows.push(h("p", { class: "hint" }, `No one outside the ${branch.name.replace(/^The /, "")} is called “${query}”.`));
+      if (!ids.length) rows.push(h("p", { class: "hint" }, `No one outside this branch is called “${query}”.`));
       else for (const x of ids.slice(0, 12)) rows.push(pickRow(x, suggestions.find((s) => s.otherId === x && s.role === state.role)?.reason));
     }
     list.replaceChildren(...rows);
@@ -172,8 +172,8 @@ export function showLink(id, { role = null, otherId = null } = {}) {
 
     const otherBranch = branchOf(data, o.id, groupInfo);
     const joins = !otherBranch
-      ? (branch.count === 1 ? `${p.first} joins your tree.` : `All ${people(branch.count)} in ${branch.name.replace(/^The/, "the")} join your tree.`)
-      : `${branch.name} and ${otherBranch.name.replace(/^The/, "the")} become one branch. It is still not connected to you.`;
+      ? (branch.count === 1 ? `${p.first} joins your tree.` : `All ${people(branch.count)} in this branch join your tree.`)
+      : `This branch and ${o.first}’s branch become one. It is still not connected to you.`;
 
     const extra = otherParent();
     let extraEl = null;
@@ -215,7 +215,7 @@ export function showLink(id, { role = null, otherId = null } = {}) {
         }
       }, {
         message: `${p.first} was linked as ${o.first}’s ${roleWord(p, state.role)}.`,
-        detail: joinsMe ? `${branch.name} joined your tree.` : `${branch.name} joined another branch.`,
+        detail: joinsMe ? "The branch joined your tree." : "The two branches are now one.",
         offerUndo: true,
       });
       closeSheet();
@@ -233,7 +233,7 @@ export function showLink(id, { role = null, otherId = null } = {}) {
     kicker("Not yet connected to you"),
     h("p", { class: "dup-name link-name" }, fullName(p)),
     h("p", { class: "row-sub" }, store.parentsLabel(p, { full: true }) || "Parents not added yet"),
-    h("p", { class: "row-sub" }, `In ${branch.name.replace(/^The/, "the")} · ${people(branch.count)}`),
+    h("p", { class: "row-sub" }, `In a separate branch · ${people(branch.count)}`),
     h("div", { class: "person-form link-form" },
       segment,
       h("div", { class: "field" },

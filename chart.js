@@ -6,12 +6,12 @@
 import { layoutTree, BOX_W, BOX_H } from "./layout.js";
 import { pathTo } from "./kin.js";
 import * as fold from "./fold.js";
-import { groups, branchName } from "./branch.js";
+import { groups } from "./branch.js";
 
 const MIN_SCALE = 0.25;
 const MAX_SCALE = 2;
 const SVG_NS = "http://www.w3.org/2000/svg";
-const FRAME_TOP = 62; // room above a separate branch for its name
+const FRAME_TOP = 40; // room above a separate branch for its label
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
@@ -181,7 +181,7 @@ export function createChart(container, { onSelect, onEmpty, onFold, insets }) {
     boxes.replaceChildren(...els);
   }
 
-  // A dashed frame around each separate branch, with its name and how many people are in it.
+  // A dashed frame around each separate branch, saying how many people are in it.
   function branchFrames() {
     const g = groups(data);
     const frames = [];
@@ -199,10 +199,7 @@ export function createChart(container, { onSelect, onEmpty, onFold, insets }) {
       const label = document.createElement("span");
       label.className = "branch-label";
       label.textContent = `Not yet connected · ${count === 1 ? "1 person" : count + " people"}`;
-      const name = document.createElement("span");
-      name.className = "branch-name";
-      name.textContent = branchName(data, group.ids);
-      frame.append(label, name);
+      frame.append(label);
       frames.push(frame);
     }
     return frames;

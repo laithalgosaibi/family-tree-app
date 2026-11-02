@@ -335,7 +335,7 @@ function branchBox(id) {
   const s = suggestForBranch(data, id);
   const others = branch.count - 1;
   const intro = h("p", { class: "branch-intro" }, "This branch isn’t joined to your tree yet."
-    + (others ? ` ${branch.name} has ${branch.count} people.` : ""));
+    + (others ? ` This branch has ${branch.count} people.` : ""));
   if (!s) {
     return h("section", { class: "branch-box" }, intro,
       h("p", { class: "hint" }, "When you find how they join your family, link one person and the whole branch joins."),

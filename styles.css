@@ -1147,7 +1147,6 @@ body.chart-mode .top { z-index: 10; }
   color: var(--gold-ink);
   white-space: nowrap;
 }
-.branch-name { font-family: var(--font-heading); font-size: 19px; font-weight: 500; line-height: 1.15; }
 
 /* "This branch isn’t joined to your tree yet" on a person's card */
 .branch-box {
