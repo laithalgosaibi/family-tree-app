@@ -32,6 +32,7 @@ export function createChart(container, { onSelect, onEmpty, onFold, insets }) {
   let tx = 0;
   let ty = 0;
   let layout = null;
+  let layoutKey = null;
   let data = null;
   let meId = null;
   let selectedId = null;
@@ -92,7 +93,10 @@ export function createChart(container, { onSelect, onEmpty, onFold, insets }) {
   function draw() {
     // Folded branches are left out before working out positions.
     const shown = fold.view(data);
-    layout = layoutTree(shown.data);
+    // Working out positions takes a moment on a big tree, so it is only redone
+    // when the people or links shown have changed (not when someone is tapped).
+    const key = JSON.stringify(shown.data);
+    if (key !== layoutKey) { layout = layoutTree(shown.data); layoutKey = key; }
     const pad = 40;
     svg.setAttribute("width", layout.width + pad * 2);
     svg.setAttribute("height", layout.height + pad * 2);

@@ -203,19 +203,35 @@ function layoutPart(part, { parentsOf, childrenOf, spousesOf, people }) {
       for (const b of row) { b.x = x; x += b.w + BLOCK_GAP; }
     }
   };
+  // Lines from parents to children, one row at a time. A line starts where the
+  // parents' line comes down (between a husband and wife), so brothers and sisters
+  // that share both parents never count as crossing each other.
+  const famsBelow = Array.from({ length: rowCount }, () => []);
+  for (const fam of familyList) famsBelow[Math.max(...fam.parents.map((p) => gen.get(p)))].push(fam);
+  const edgesBelow = (r) => {
+    const edges = [];
+    for (const fam of famsBelow[r]) {
+      const from = dropX(fam);
+      for (const c of fam.children) if (gen.get(c) === r + 1) edges.push([from, centreOf(c)]);
+    }
+    return edges;
+  };
+  // How untidy the lines between row r and the row below are: first the number of
+  // lines that cross, then how far the lines have to run sideways.
+  let work = 0;
+  const messAt = (r) => {
+    if (r < 0 || r >= rowCount - 1) return [0, 0];
+    work++;
+    const edges = edgesBelow(r);
+    let reach = 0;
+    for (const [a, b] of edges) reach += Math.abs(a - b);
+    // Two lines cross when one starts further left but ends further right.
+    edges.sort((p, q) => p[0] - q[0] || p[1] - q[1]);
+    return [countInversions(edges.map((e) => e[1])), reach];
+  };
   const crossings = () => {
     let count = 0;
-    for (const row of rows) {
-      const edges = [];
-      for (const b of row) for (const m of b.members) for (const c of childrenOf.get(m)) {
-        if (gen.get(c) === b.gen + 1) edges.push([centreOf(m), centreOf(c)]);
-      }
-      for (let i = 0; i < edges.length; i++) for (let j = i + 1; j < edges.length; j++) {
-        const [a1, a2] = edges[i];
-        const [b1, b2] = edges[j];
-        if ((a1 - b1) * (a2 - b2) < 0) count++;
-      }
-    }
+    for (let r = 0; r < rowCount - 1; r++) count += messAt(r)[0];
     return count;
   };
   const sortRow = (row, keyOf) => {
@@ -246,6 +262,89 @@ function layoutPart(part, { parentsOf, childrenOf, spousesOf, people }) {
   }
   rows = best;
   pack();
+
+  // Tidy up: try moving each family to every other place in its row, and turning
+  // a husband and wife round, keeping any change that removes a crossing line.
+  // A move can also bring the rows just above and below along with it, so a whole
+  // side of the family can move across together. When nothing crosses, a move is
+  // still kept if it makes the lines shorter. This keeps brothers and sisters
+  // together under their own parents, and puts a married child at the edge of their
+  // family next to their husband's or wife's family, so each side of the family
+  // stays on its own side.
+  const messNear = (r) => {
+    let count = 0;
+    let reach = 0;
+    for (let k = r - 2; k <= r + 1; k++) { const [c, d] = messAt(k); count += c; reach += d; }
+    return [count, reach];
+  };
+  const better = (p, q) => p[0] < q[0] || (p[0] === q[0] && p[1] < q[1] - 0.5);
+  const flip = (block) => {
+    block.members.reverse();
+    block.members.forEach((m, i) => { blockOf.get(m).index = i; });
+  };
+  const byParents = (b) => average(
+    b.members.flatMap((m) => parentsOf.get(m).filter((p) => gen.get(p) === b.gen - 1).map(centreOf)),
+    b.x + b.w / 2);
+  const byChildren = (b) => average(
+    b.members.flatMap((m) => childrenOf.get(m).filter((c) => gen.get(c) === b.gen + 1).map(centreOf)),
+    b.x + b.w / 2);
+  // On a very big tree this stops after a fixed amount of work, so the chart never
+  // feels slow (and always comes out the same way).
+  const budget = work + 20000;
+  for (let round = 0; round < 12 && work < budget; round++) {
+    let improved = false;
+    for (let r = 0; r < rowCount; r++) {
+      for (const block of [...rows[r]]) {
+        if (work > budget) break;
+        const saved = [rows[r - 1], rows[r], rows[r + 1]];
+        const from = saved[1].indexOf(block);
+        let bestMess = messNear(r);
+        let bestRows = null;
+        let bestFlip = false;
+        // Where nothing crosses nearby, only small moves (to shorten lines) are tried.
+        const tangled = bestMess[0] > 0;
+        const turns = tangled && block.members.length === 2 ? [false, true] : [false];
+        const places = tangled
+          ? saved[1].map((_, i) => i)
+          : [from - 1, from + 1].filter((i) => i >= 0 && i < saved[1].length);
+        const follows = tangled ? [false, true] : [false];
+        for (const turned of turns) {
+          if (turned) flip(block);
+          for (const to of places) {
+            for (const follow of follows) {
+              if (to === from && !turned && !follow) continue;
+              const row = saved[1].filter((b) => b !== block);
+              row.splice(to, 0, block);
+              rows[r] = row;
+              pack();
+              if (follow) {
+                if (r + 1 < rowCount) rows[r + 1] = sortRow(saved[2], byParents);
+                if (r > 0) rows[r - 1] = sortRow(saved[0], byChildren);
+                pack();
+              }
+              const mess = messNear(r);
+              // Turning a couple round is only worth it to remove a crossing.
+              const ok = turned && !bestFlip ? mess[0] < bestMess[0] : better(mess, bestMess);
+              if (ok) { bestMess = mess; bestRows = [rows[r - 1], rows[r], rows[r + 1]]; bestFlip = turned; }
+              if (r > 0) rows[r - 1] = saved[0];
+              rows[r] = saved[1];
+              if (r + 1 < rowCount) rows[r + 1] = saved[2];
+            }
+          }
+          if (turned) flip(block);
+        }
+        if (bestRows) {
+          if (bestFlip) flip(block);
+          if (r > 0) rows[r - 1] = bestRows[0];
+          rows[r] = bestRows[1];
+          if (r + 1 < rowCount) rows[r + 1] = bestRows[2];
+          improved = true;
+        }
+        pack();
+      }
+    }
+    if (!improved) break;
+  }
 
   // 4. Slide blocks so children sit under parents and parents over children.
   const offsetIn = (id) => blockOf.get(id).index * (BOX_W + SPOUSE_GAP) + BOX_W / 2;
@@ -287,6 +386,31 @@ function layoutPart(part, { parentsOf, childrenOf, spousesOf, people }) {
     }));
   }
   return { nodes, width, height: rowCount * ROW_H - ROW_GAP };
+}
+
+// How many pairs in a list are the wrong way round (a bigger number before a
+// smaller one). Done by sorting, so it stays quick on long lists.
+function countInversions(list) {
+  if (list.length < 2) return 0;
+  if (list.length < 120) {
+    let count = 0;
+    for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) if (list[j] < list[i]) count++;
+    return count;
+  }
+  const mid = list.length >> 1;
+  const left = list.slice(0, mid);
+  const right = list.slice(mid);
+  let count = countInversions(left) + countInversions(right);
+  let i = 0;
+  let j = 0;
+  let k = 0;
+  while (i < left.length && j < right.length) {
+    if (right[j] < left[i]) { count += left.length - i; list[k++] = right[j++]; }
+    else list[k++] = left[i++];
+  }
+  while (i < left.length) list[k++] = left[i++];
+  while (j < right.length) list[k++] = right[j++];
+  return count;
 }
 
 // Order husbands and wives in a block. A man with one wife sits on the left.
