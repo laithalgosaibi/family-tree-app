@@ -207,7 +207,10 @@ function layoutPart(part, { parentsOf, childrenOf, spousesOf, people }) {
   // parents' line comes down (between a husband and wife), so brothers and sisters
   // that share both parents never count as crossing each other.
   const famsBelow = Array.from({ length: rowCount }, () => []);
-  for (const fam of familyList) famsBelow[Math.max(...fam.parents.map((p) => gen.get(p)))].push(fam);
+  for (const fam of familyList) {
+    fam.kids = new Set(fam.children);
+    famsBelow[Math.max(...fam.parents.map((p) => gen.get(p)))].push(fam);
+  }
   const edgesBelow = (r) => {
     const edges = [];
     for (const fam of famsBelow[r]) {
@@ -225,9 +228,24 @@ function layoutPart(part, { parentsOf, childrenOf, spousesOf, people }) {
     const edges = edgesBelow(r);
     let reach = 0;
     for (const [a, b] of edges) reach += Math.abs(a - b);
+    // A family's line also should not run over someone who is not one of its
+    // children (for example an aunt's line passing over an in-law's family).
+    let over = 0;
+    for (const fam of famsBelow[r]) {
+      const xs = [dropX(fam)];
+      for (const c of fam.children) if (gen.get(c) === r + 1) xs.push(centreOf(c));
+      if (xs.length < 2) continue;
+      const lo = Math.min(...xs);
+      const hi = Math.max(...xs);
+      for (const b of rows[r + 1]) {
+        const mid = b.x + b.w / 2;
+        if (mid > lo && mid < hi && !b.members.some((m) => fam.kids.has(m))) over++;
+      }
+    }
     // Two lines cross when one starts further left but ends further right.
     edges.sort((p, q) => p[0] - q[0] || p[1] - q[1]);
-    return [countInversions(edges.map((e) => e[1])), reach];
+    // A crossing counts most; a line running over someone counts a bit less.
+    return [countInversions(edges.map((e) => e[1])) + 0.7 * over, reach];
   };
   const crossings = () => {
     let count = 0;
@@ -275,11 +293,15 @@ function layoutPart(part, { parentsOf, childrenOf, spousesOf, people }) {
     let count = 0;
     let reach = 0;
     for (let k = r - 2; k <= r + 1; k++) { const [c, d] = messAt(k); count += c; reach += d; }
+    // A husband and wife turned round (wife on the left) counts a little too, so
+    // couples are only turned when that really tidies the lines.
+    for (let k = r - 1; k <= r + 1; k++) for (const b of rows[k] || []) if (b.turned) count += 0.3;
     return [count, reach];
   };
-  const better = (p, q) => p[0] < q[0] || (p[0] === q[0] && p[1] < q[1] - 0.5);
+  const better = (p, q) => p[0] < q[0] - 1e-9 || (Math.abs(p[0] - q[0]) < 1e-9 && p[1] < q[1] - 0.5);
   const flip = (block) => {
     block.members.reverse();
+    block.turned = !block.turned;
     block.members.forEach((m, i) => { blockOf.get(m).index = i; });
   };
   const byParents = (b) => average(
@@ -290,7 +312,7 @@ function layoutPart(part, { parentsOf, childrenOf, spousesOf, people }) {
     b.x + b.w / 2);
   // On a very big tree this stops after a fixed amount of work, so the chart never
   // feels slow (and always comes out the same way).
-  const budget = work + 20000;
+  const budget = work + 12000;
   for (let round = 0; round < 12 && work < budget; round++) {
     let improved = false;
     for (let r = 0; r < rowCount; r++) {
@@ -323,9 +345,7 @@ function layoutPart(part, { parentsOf, childrenOf, spousesOf, people }) {
                 pack();
               }
               const mess = messNear(r);
-              // Turning a couple round is only worth it to remove a crossing.
-              const ok = turned && !bestFlip ? mess[0] < bestMess[0] : better(mess, bestMess);
-              if (ok) { bestMess = mess; bestRows = [rows[r - 1], rows[r], rows[r + 1]]; bestFlip = turned; }
+              if (better(mess, bestMess)) { bestMess = mess; bestRows = [rows[r - 1], rows[r], rows[r + 1]]; bestFlip = turned; }
               if (r > 0) rows[r - 1] = saved[0];
               rows[r] = saved[1];
               if (r + 1 < rowCount) rows[r + 1] = saved[2];
