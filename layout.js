@@ -230,17 +230,20 @@ function layoutPart(part, { parentsOf, childrenOf, spousesOf, people }) {
     for (const [a, b] of edges) reach += Math.abs(a - b);
     // A family's line also should not run over someone who is not one of its
     // children (for example an aunt's line passing over an in-law's family).
+    // Counted by order, not by distance, because blocks are slid into place later.
     let over = 0;
+    const below = rows[r + 1];
+    const place = new Map(below.map((b, i) => [b, i]));
     for (const fam of famsBelow[r]) {
-      const xs = [dropX(fam)];
-      for (const c of fam.children) if (gen.get(c) === r + 1) xs.push(centreOf(c));
-      if (xs.length < 2) continue;
-      const lo = Math.min(...xs);
-      const hi = Math.max(...xs);
-      for (const b of rows[r + 1]) {
-        const mid = b.x + b.w / 2;
-        if (mid > lo && mid < hi && !b.members.some((m) => fam.kids.has(m))) over++;
+      let lo = Infinity;
+      let hi = -Infinity;
+      for (const c of fam.children) {
+        if (gen.get(c) !== r + 1) continue;
+        const i = place.get(blockFor(c));
+        if (i < lo) lo = i;
+        if (i > hi) hi = i;
       }
+      for (let i = lo + 1; i < hi; i++) if (!below[i].members.some((m) => fam.kids.has(m))) over++;
     }
     // Two lines cross when one starts further left but ends further right.
     edges.sort((p, q) => p[0] - q[0] || p[1] - q[1]);
@@ -313,51 +316,93 @@ function layoutPart(part, { parentsOf, childrenOf, spousesOf, people }) {
   // On a very big tree this stops after a fixed amount of work, so the chart never
   // feels slow (and always comes out the same way).
   const budget = work + 12000;
+  // Everyone below a family (children, grandchildren...), row by row, so a whole
+  // branch can be moved across together.
+  const branchBelow = (block) => {
+    const found = new Set();
+    const byRow = new Map();
+    const queue = [block];
+    while (queue.length) {
+      const b = queue.shift();
+      for (const m of b.members) for (const c of childrenOf.get(m)) {
+        const cb = blockFor(c);
+        if (cb.gen <= b.gen || found.has(cb)) continue;
+        found.add(cb);
+        if (!byRow.has(cb.gen)) byRow.set(cb.gen, []);
+        byRow.get(cb.gen).push(cb);
+        queue.push(cb);
+      }
+    }
+    return byRow;
+  };
+  // Move a branch's rows so it sits together under its (moved) family.
+  const moveBranch = (byRow) => {
+    for (let k = 0; k < rowCount; k++) {
+      const group = byRow.get(k);
+      if (!group) continue;
+      const inGroup = new Set(group);
+      const kept = rows[k].filter((b) => !inGroup.has(b));
+      const ordered = rows[k].filter((b) => inGroup.has(b));
+      const key = average(ordered.map(byParents), 0);
+      let at = kept.findIndex((b) => byParents(b) > key);
+      if (at === -1) at = kept.length;
+      rows[k] = [...kept.slice(0, at), ...ordered, ...kept.slice(at)];
+      pack();
+    }
+  };
+  const messFrom = (r) => {
+    let count = 0;
+    let reach = 0;
+    for (let k = Math.max(0, r - 2); k < rowCount - 1; k++) { const [c, d] = messAt(k); count += c; reach += d; }
+    for (let k = Math.max(0, r - 1); k < rowCount; k++) for (const b of rows[k]) if (b.turned) count += 0.3;
+    return [count, reach];
+  };
   for (let round = 0; round < 12 && work < budget; round++) {
     let improved = false;
     for (let r = 0; r < rowCount; r++) {
       for (const block of [...rows[r]]) {
         if (work > budget) break;
-        const saved = [rows[r - 1], rows[r], rows[r + 1]];
-        const from = saved[1].indexOf(block);
-        let bestMess = messNear(r);
+        const saved = rows.slice();
+        const from = saved[r].indexOf(block);
+        let bestMess = messFrom(r);
         let bestRows = null;
         let bestFlip = false;
+        const below = branchBelow(block);
         // Where nothing crosses nearby, only small moves (to shorten lines) are tried.
         const tangled = bestMess[0] > 0;
         const turns = tangled && block.members.length === 2 ? [false, true] : [false];
         const places = tangled
-          ? saved[1].map((_, i) => i)
-          : [from - 1, from + 1].filter((i) => i >= 0 && i < saved[1].length);
-        const follows = tangled ? [false, true] : [false];
+          ? saved[r].map((_, i) => i)
+          : [from - 1, from + 1].filter((i) => i >= 0 && i < saved[r].length);
+        // A move can bring along the rows just above and below, or the whole
+        // branch of the family below it.
+        const follows = tangled ? ["none", "around", "branch"] : ["none"];
         for (const turned of turns) {
           if (turned) flip(block);
           for (const to of places) {
             for (const follow of follows) {
-              if (to === from && !turned && !follow) continue;
-              const row = saved[1].filter((b) => b !== block);
+              if (to === from && !turned && follow === "none") continue;
+              const row = saved[r].filter((b) => b !== block);
               row.splice(to, 0, block);
               rows[r] = row;
               pack();
-              if (follow) {
-                if (r + 1 < rowCount) rows[r + 1] = sortRow(saved[2], byParents);
-                if (r > 0) rows[r - 1] = sortRow(saved[0], byChildren);
+              if (follow === "around") {
+                if (r + 1 < rowCount) rows[r + 1] = sortRow(saved[r + 1], byParents);
+                if (r > 0) rows[r - 1] = sortRow(saved[r - 1], byChildren);
                 pack();
+              } else if (follow === "branch") {
+                moveBranch(below);
               }
-              const mess = messNear(r);
-              if (better(mess, bestMess)) { bestMess = mess; bestRows = [rows[r - 1], rows[r], rows[r + 1]]; bestFlip = turned; }
-              if (r > 0) rows[r - 1] = saved[0];
-              rows[r] = saved[1];
-              if (r + 1 < rowCount) rows[r + 1] = saved[2];
+              const mess = messFrom(r);
+              if (better(mess, bestMess)) { bestMess = mess; bestRows = rows.slice(); bestFlip = turned; }
+              for (let k = 0; k < rowCount; k++) rows[k] = saved[k];
             }
           }
           if (turned) flip(block);
         }
         if (bestRows) {
           if (bestFlip) flip(block);
-          if (r > 0) rows[r - 1] = bestRows[0];
-          rows[r] = bestRows[1];
-          if (r + 1 < rowCount) rows[r + 1] = bestRows[2];
+          for (let k = 0; k < rowCount; k++) rows[k] = bestRows[k];
           improved = true;
         }
         pack();
@@ -372,23 +417,43 @@ function layoutPart(part, { parentsOf, childrenOf, spousesOf, people }) {
     const order = round % 2 === 0 ? rows : [...rows].reverse();
     for (const row of order) {
       const wants = row.map((b) => {
-        const asks = [];
+        const asks = []; // [x, weight]
+        // A family's line should come down somewhere over its children. Being over
+        // the middle is nicest, but anywhere between the first and last child is
+        // fine, so a family with many children can make room for its neighbours.
+        // Being outside its children (the line would run over someone else) pulls hard.
+        const pull = (shift) => {
+          // shift: how far this block should move to put the line over the middle,
+          // and edge: how far to move to put it just inside the children.
+          asks.push([b.x + shift.mid, 0.3]);
+          if (shift.edge) asks.push([b.x + shift.edge, 1]);
+        };
+        const spanShift = (fam, sign) => {
+          const top = Math.max(...fam.parents.map((p) => gen.get(p)));
+          const kids = fam.children.filter((c) => gen.get(c) > top);
+          const xs = kids.map(centreOf);
+          const lo = Math.min(...xs);
+          const hi = Math.max(...xs);
+          const drop = dropX(fam);
+          const mid = (lo + hi) / 2;
+          const edge = drop < lo ? lo - drop : drop > hi ? hi - drop : 0;
+          return { mid: sign * (mid - drop), edge: sign * edge };
+        };
         // From its parents: each member wants to be under the line from their parents.
         for (const m of b.members) {
           const ps = parentsOf.get(m);
           if (!ps.length || ps.some((p) => gen.get(p) >= b.gen)) continue;
-          const fam = families.get([...ps].sort().join("|"));
-          asks.push(dropX(fam) - offsetIn(m));
+          pull(spanShift(families.get([...ps].sort().join("|")), -1));
         }
-        // From its children: the line down should sit over the middle of the children.
+        // From its children: the line down should sit over the children.
         for (const fam of familyList) {
           if (!fam.parents.every((p) => blockFor(p) === b)) continue;
-          const kids = fam.children.filter((c) => gen.get(c) > b.gen);
-          if (!kids.length) continue;
-          const mid = (Math.min(...kids.map(centreOf)) + Math.max(...kids.map(centreOf))) / 2;
-          asks.push(b.x + (mid - dropX(fam)));
+          if (!fam.children.some((c) => gen.get(c) > b.gen)) continue;
+          pull(spanShift(fam, 1));
         }
-        return asks.length ? { x: average(asks), weight: asks.length } : { x: b.x, weight: 0.05 };
+        if (!asks.length) return { x: b.x, weight: 0.05 };
+        const weight = asks.reduce((t, [, w]) => t + w, 0);
+        return { x: asks.reduce((t, [x, w]) => t + x * w, 0) / weight, weight };
       });
       placeRow(row, wants);
     }
