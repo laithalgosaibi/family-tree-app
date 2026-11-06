@@ -12,6 +12,10 @@
 //   path:    the people from `fromId` to `toId`, one link at a time
 //   common:  ids on the path who are the shared ancestor of the two ends of a blood stretch
 //   also:    other ways they are related too, e.g. when parents are cousins: [{ words, via }]
+//
+// A husband and wife who are also blood relatives (cousins who married) are "husband"
+// or "wife" first, with the blood tie in `also`. A blood relative who is also an in-law
+// (your cousin who married your sister) keeps the blood words, with "brother-in-law" in `also`.
 
 import { pathBetween } from "./layout.js";
 
@@ -38,6 +42,7 @@ function index(data) {
     parents: (id) => parents.get(id) || [],
     children: (id) => children.get(id) || [],
     spouse: (a, b) => (spouses.get(a) || []).find((s) => s.id === b) || null,
+    spouses: (id) => (spouses.get(id) || []).map((s) => s.id),
   };
 }
 
@@ -244,6 +249,30 @@ function describeChain(ix, path) {
   return { steps, merged };
 }
 
+// In-law words that also fit two blood relatives, when someone married within the family:
+// your cousin who is also your sister's husband is your brother-in-law too.
+// Only one marriage away: a spouse's parent, sibling or child, or a sibling's, child's
+// or grandchild's spouse.
+function inLaws(ix, fromId, toId) {
+  const out = [];
+  const step = (r, gender) => ({ type: "blood", a: r.a, b: r.b, half: r.half, gender });
+  // Through your own husband or wife: their father, sister, son.
+  for (const s of ix.spouses(fromId)) {
+    if (s === toId) continue;
+    const r = blood(ix, s, toId, false);
+    const m = r && merge(ix, { type: "spouse" }, step(r, ix.gender(toId)));
+    if (m && m.type === "in-law") out.push({ words: m.words, via: { spouse: s } });
+  }
+  // Through their husband or wife: your sister's husband, your son's wife.
+  for (const s of ix.spouses(toId)) {
+    if (s === fromId) continue;
+    const r = blood(ix, fromId, s, false);
+    const m = r && merge(ix, step(r, ix.gender(s)), { type: "spouse", gender: ix.gender(toId) });
+    if (m && m.type === "in-law") out.push({ words: m.words, via: null });
+  }
+  return out;
+}
+
 // ---- The answer ----
 
 export function relationship(data, fromId, toId, ix = index(data)) {
@@ -251,14 +280,29 @@ export function relationship(data, fromId, toId, ix = index(data)) {
   if (fromId === toId) return { kind: "self", words: "you", path: [fromId], common: [], also: [], via: null };
 
   const b = blood(ix, fromId, toId);
+
+  // Married to each other: that comes first, even when they are cousins too.
+  if (ix.spouse(fromId, toId)) {
+    const also = b ? [{ words: b.words, via: sideMatters(b) ? b.via : null }, ...b.also] : [];
+    return { kind: "marriage", words: spouseWord(ix, fromId, toId), via: null, path: [fromId, toId], common: [], also };
+  }
+
   if (b) {
+    // A parent or child is just that, even when the parents are cousins.
+    const also = b.a + b.b === 1 ? [] : b.also.map((o) => ({ words: o.words, via: o.via }));
+    // Not in a straight line (not a parent or grandchild): an in-law word can fit too.
+    if (b.a > 0 && b.b > 0) {
+      for (const o of inLaws(ix, fromId, toId)) {
+        if (o.words !== b.words && !also.some((x) => x.words === o.words)) also.push(o);
+      }
+    }
     return {
       kind: "blood",
       words: b.words,
       via: sideMatters(b) ? b.via : null,
       path: b.path,
       common: b.common ? [b.common] : [],
-      also: b.also.map((o) => ({ words: o.words, via: o.via })),
+      also,
     };
   }
 

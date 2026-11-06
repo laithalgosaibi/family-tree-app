@@ -3,12 +3,13 @@
 
 import * as store from "./store.js";
 import { createChart } from "./chart.js";
-import { h, kicker, openSheet, closeSheet, sheet, makeSegment } from "./ui.js";
+import { h, kicker, openSheet, closeSheet, sheet, makeSegment, icon } from "./ui.js";
 import * as backup from "./backup.js";
 import * as edit from "./edit.js";
 import * as undo from "./undo.js";
 import * as fold from "./fold.js";
-import { relationship, pathWithWords, sideWords } from "./kin.js";
+import { relationship, pathWithWords, sideWords, whose } from "./kin.js";
+import { search as findPeople } from "./find.js";
 import * as search from "./search.js";
 import * as finder from "./finder.js";
 import { finderIcon } from "./finder.js";
@@ -16,6 +17,7 @@ import { branchOf, suggestForBranch, question, roleWord } from "./branch.js";
 import * as link from "./link.js";
 
 const main = document.getElementById("main");
+const searchIcon = () => icon('<circle cx="8.5" cy="8.5" r="5.5"/><path d="M12.6 12.6 17 17"/>');
 
 function byName(a, b) {
   return store.fullName(a).localeCompare(store.fullName(b));
@@ -470,6 +472,48 @@ function showForm(kind, anchorId) {
     ? makeSegment("Husband or wife", [["m", "Husband"], ["f", "Wife"]], null, (v) => { gender = v; update(); })
     : null;
 
+  // ---- Someone already in the tree (adding a spouse) ----
+  // Cousins who married, or anyone added before the marriage was: pick them instead of typing a name.
+  let pickedId = null;
+  let pickMode = false;
+  const newGender = gender;
+  let whoSeg = null;
+  let pickEl = null;
+  const pickList = h("div", { class: "link-list" });
+  const pickChanges = h("div", { class: "link-changes" });
+  const pickInput = h("input", {
+    type: "search",
+    class: "search-input",
+    placeholder: "Search by name",
+    "aria-label": "Who are they married to? Search by name",
+    autocomplete: "off",
+    autocapitalize: "words",
+    spellcheck: "false",
+    enterkeyhint: "search",
+  });
+  if (kind === "spouse") {
+    whoSeg = makeSegment("Who", [["new", "Someone new"], ["tree", "Already in the tree"]], "new", (v) => {
+      pickMode = v === "tree";
+      contextKicker.textContent = pickMode ? "Spouse" : context[0];
+      if (!pickMode) { pickedId = null; gender = newGender; }
+      for (const el of [first.el, father.el, family.el, groupHint, spouseGenderSeg]) if (el) el.hidden = pickMode;
+      pickEl.hidden = !pickMode;
+      drawPick();
+      update();
+      if (pickMode) pickInput.focus();
+    });
+    pickInput.addEventListener("input", () => drawPick());
+    pickInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); pickList.querySelector(".link-pick:not(:disabled)")?.click(); }
+    });
+    pickEl = h("div", { class: "pick-existing", hidden: true },
+      h("div", { class: "field" },
+        h("span", { class: "field-label" }, `Who is ${anchor.first} married to?`),
+        h("label", { class: "search-box" }, searchIcon(), pickInput)),
+      pickList,
+      pickChanges);
+  }
+
   // ---- Name fields ----
   const field = (name, label) => {
     const input = h("input", { name, autocomplete: "off", autocapitalize: "words", spellcheck: "false" });
@@ -587,6 +631,77 @@ function showForm(kind, anchorId) {
         h("button", { type: "button", class: "text-btn", onclick: () => { dismissed.add(match.id); drawDup(); } }, "No, someone else")));
   }
 
+  // The people who match the search, with how each is related to the person tapped.
+  function drawPick() {
+    if (!pickEl) return;
+    const data = store.getData();
+    const query = pickInput.value.trim();
+    const rows = [];
+    if (pickedId) {
+      // Once picked, only they show, so what changes is in view. Tap them again to pick someone else.
+      rows.push(pickRow(data, pickedId), h("p", { class: "hint" }, "Tap them again to choose someone else."));
+    } else if (!query) {
+      rows.push(h("p", { class: "hint" }, "Type their name to find them. Cousins and other relatives can be picked too."));
+    } else {
+      const found = findPeople(data, query);
+      const ids = [...found.named, ...found.other].flatMap((e) => (e.same ? e.items : [e])).map((e) => e.id)
+        // Not anyone who can't be their spouse: their own parent, child or grandchild.
+        .filter((x) => x !== anchor.id && !store.checkSpouseLink(anchor.id, x));
+      // Husbands for a woman, wives for a man, first.
+      const fits = (x) => !anchor.gender || !data.people[x].gender || data.people[x].gender !== anchor.gender;
+      ids.sort((a, b) => fits(b) - fits(a));
+      if (!ids.length) rows.push(h("p", { class: "hint" }, `No one in the tree is called “${query}”.`));
+      for (const x of ids.slice(0, 12)) rows.push(pickRow(data, x));
+    }
+    pickList.replaceChildren(...rows);
+    drawPickChanges(data);
+  }
+
+  function pickRow(data, x) {
+    const o = data.people[x];
+    const rel = relationship(data, anchor.id, x);
+    const relText = rel.kind === "none" ? `Not connected to ${anchor.first} yet` : `${anchor.first}’s ${rel.words}`;
+    const why = store.checkSpouseLink(anchor.id, x);
+    const picked = pickedId === x;
+    return h("button", {
+      type: "button",
+      class: "link-pick" + (picked ? " picked" : ""),
+      "aria-pressed": String(picked),
+      disabled: !!why,
+      onclick: () => {
+        pickedId = picked ? null : x;
+        gender = pickedId ? store.getPerson(pickedId).gender : newGender;
+        drawPick();
+        update();
+      },
+    },
+    h("span", { class: "radio-dot", "aria-hidden": "true" }),
+    h("span", { class: "row-text" },
+      h("span", { class: "row-name" }, store.fullName(o)),
+      h("span", { class: "link-rel" + (rel.kind === "none" ? " none" : "") }, relText),
+      h("span", { class: "row-sub" }, store.parentsLabel(o) || "Parents not added yet"),
+      why && h("span", { class: "row-sub link-why" }, why)));
+  }
+
+  // What linking them does, said in plain words.
+  function drawPickChanges(data) {
+    const o = pickedId && data.people[pickedId];
+    if (!o) return pickChanges.replaceChildren();
+    const word = o.gender === "m" ? "husband" : o.gender === "f" ? "wife" : "spouse";
+    const rel = relationship(data, anchor.id, o.id);
+    const lines = [h("p", { class: "link-line" }, `${o.first} becomes ${anchor.first}’s ${former ? "former " + word : word}.`)];
+    if (rel.kind === "blood") {
+      lines.push(h("p", { class: "person-side" },
+        `They stay ${anchor.first}’s ${rel.words} too. Both keep their place on the chart, joined by a marriage line.`));
+    } else if (rel.kind === "none") {
+      const meId = data.meId;
+      lines.push(h("p", { class: "person-side" }, branchOf(data, o.id) || branchOf(data, anchor.id)
+        ? (meId ? "Their branch joins your tree." : "The two branches become one.")
+        : "Their two families become one."));
+    }
+    pickChanges.replaceChildren(kicker("What changes"), ...lines);
+  }
+
   // ---- Suggested names, from what the tree already knows ----
   function setIfUntouched(f, value) {
     if (!touched.has(f.input.name)) f.input.value = value || "";
@@ -617,6 +732,8 @@ function showForm(kind, anchorId) {
 
   function drawRelate() {
     if (!relateBox) return;
+    relateBox.hidden = pickMode;
+    if (pickMode) return;
     if (kind === "branch") {
       relWords.textContent = "Not connected to you yet";
       relSide.textContent = "Link the branch to your tree once you find the connection.";
@@ -656,8 +773,9 @@ function showForm(kind, anchorId) {
     if (kind === "child") saveBtn.textContent = gender === "f" ? "Add daughter" : "Add son";
     else if (kind === "parent") saveBtn.textContent = gender === "f" ? "Add mother" : "Add father";
     else if (kind === "branch") saveBtn.textContent = "Start branch";
-    else saveBtn.textContent = "Add";
-    saveBtn.disabled = !first.input.value.trim() || !gender;
+    else saveBtn.textContent = pickMode ? "Link" : "Add";
+    saveBtn.disabled = pickMode ? !pickedId || !!store.checkSpouseLink(anchor.id, pickedId) : !first.input.value.trim() || !gender;
+    if (pickMode) { dupBox.hidden = true; drawPickChanges(store.getData()); drawRelate(); return; }
     drawDup();
     drawRelate();
   }
@@ -671,6 +789,8 @@ function showForm(kind, anchorId) {
     spouse: ["New spouse", spouseOf + anchorName],
     branch: ["Separate branch", "Not linked to anyone yet. Add their family around them, then link the branch to your tree once you find the connection."],
   }[kind];
+
+  const contextKicker = kicker(context[0]);
 
   // ---- Saving ----
   function save(existingId) {
@@ -712,15 +832,16 @@ function showForm(kind, anchorId) {
   }
 
   const form = h("form", { id: "person-form", class: "person-form" },
-    segment, spouseGenderSeg,
+    whoSeg, segment, spouseGenderSeg,
     first.el, father.el, family.el, groupHint,
+    pickEl,
     otherParentEl, marryEl, kidsEl,
     dupBox,
     relateBox,
     error);
   form.addEventListener("submit", (e) => {
     e.preventDefault();
-    if (!saveBtn.disabled) save(null);
+    if (!saveBtn.disabled) save(pickMode ? pickedId : null);
   });
 
   openSheet(h("div", {},
@@ -728,7 +849,7 @@ function showForm(kind, anchorId) {
       h("button", { type: "button", class: "text-btn plain", onclick: closeSheet }, "Cancel"),
       h("h2", { class: "form-title" }, titles[kind]),
       saveBtn),
-    kicker(context[0]),
+    contextKicker,
     h("p", { class: "context" }, context[1]),
     form));
 
