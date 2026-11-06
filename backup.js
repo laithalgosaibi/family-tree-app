@@ -125,15 +125,14 @@ export function showExport() {
     saveBtn,
     error,
     h("p", { class: "hint center" }, touch.matches
-      ? "Choose “Save to Files” and pick iCloud Drive, so the file is safe even if this phone is lost."
+      ? "Next, tap “Save to Files”, pick iCloud Drive, then tap Save. Note which folder you chose, so you can find the file later."
       : "The file goes to your Downloads folder. Keep a copy in iCloud Drive to open it on your iPhone.")));
 }
 
 // Saves the file. On iPhone this opens the share sheet (with "Save to Files");
-// on the Mac it downloads straight to the Downloads folder.
-async function doExport(name, error) {
-  error.textContent = "";
-  const text = store.exportText(deviceName());
+// on the Mac Safari downloads it to wherever its downloads go (normally Downloads).
+// Returns "shared", "downloaded", or null if the person closed the share sheet.
+async function saveFile(name, text) {
   const blob = new Blob([text], { type: "application/json" });
 
   if (touch.matches && navigator.canShare) {
@@ -141,39 +140,60 @@ async function doExport(name, error) {
     if (navigator.canShare({ files: [file] })) {
       try {
         await navigator.share({ files: [file] });
-        return exported(name, true);
+        return "shared";
       } catch (err) {
-        if (err.name === "AbortError") return; // closed the share sheet without saving
+        if (err.name === "AbortError") return null; // closed the share sheet without saving
         // Anything else: fall through and download it instead.
       }
     }
   }
 
-  try {
-    const url = URL.createObjectURL(blob);
-    const a = h("a", { href: url, download: name, hidden: true });
-    document.body.append(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
-    exported(name, false);
-  } catch {
-    error.textContent = "The file could not be saved. Try again.";
-  }
+  const url = URL.createObjectURL(blob);
+  const a = h("a", { href: url, download: name, hidden: true });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  return "downloaded";
 }
 
-function exported(name, shared) {
+// Where the file went, and how to find it if it is not where the person looks.
+function whereItWent(how) {
+  if (how === "shared") return [
+    "It is in the folder you picked after tapping Save to Files.",
+    "Can’t find it? Open the Files app, tap Browse, and search for “family”. If you chose something other than Save to Files (like Messages or Copy), it was not saved: export again."];
+  if (deviceName() === "iPhone" || deviceName() === "iPad") return [
+    "Safari saved it in the Files app, in iCloud Drive › Downloads (or On My iPhone › Downloads).",
+    "Can’t find it? Open the Files app, tap Browse, and search for “family”."];
+  return [
+    "Safari saved it where your downloads go, normally the Downloads folder.",
+    "Can’t find it? In Safari, click the downloads arrow at the top right, then the magnifying glass next to the file. Finder opens with the file selected."];
+}
+
+async function doExport(name, error) {
+  error.textContent = "";
+  let how;
+  try {
+    how = await saveFile(name, store.exportText(deviceName()));
+  } catch {
+    error.textContent = "The file could not be saved. Try again.";
+    return;
+  }
+  if (how) exported(name, how);
+}
+
+function exported(name, how) {
   store.markBackedUp();
   hideBar();
+  const [where, help] = whereItWent(how);
+  const other = { Mac: "iPhone", iPhone: "Mac", iPad: "Mac" }[deviceName()] || "other devices";
   openSheet(h("div", { class: "done" },
     kicker("Backup saved"),
     h("h2", { class: "done-title" }, "Your tree is in a file"),
     h("p", { class: "file-name-text" }, name),
-    h("p", { class: "context" }, shared
-      ? "Keep it somewhere safe, like iCloud Drive. To open the tree on your Mac, use Import a file there."
-      : deviceName() === "iPhone"
-        ? "It is in the Downloads folder of the Files app. To open the tree on your Mac, use Import a file there."
-        : "It is in your Downloads folder. To open the tree on your iPhone, use Import a file there."),
+    h("p", { class: "context" }, where),
+    h("p", { class: "hint" }, help),
+    h("p", { class: "hint" }, `Double-clicking the file won’t open it. To use it, open this app and choose Import a file. To have it on your ${other} too, put a copy in iCloud Drive.`),
     h("button", { class: "btn wide", onclick: closeSheet }, "Done")));
 }
 
@@ -249,29 +269,14 @@ function showImportConfirm(name, parsed) {
   const copyStatus = h("p", { class: "hint" });
   const copyBtn = h("button", { class: "btn wide with-icon" }, downloadIcon(), "Save a copy of my tree first");
   copyBtn.addEventListener("click", async () => {
-    const text = store.exportText(deviceName());
-    const blob = new Blob([text], { type: "application/json" });
     const fname = fileName().replace(/\.family$/, " (before import).family");
     try {
-      if (touch.matches && navigator.canShare) {
-        const file = new File([blob], fname, { type: "application/json" });
-        if (navigator.canShare({ files: [file] })) {
-          await navigator.share({ files: [file] });
-          copyStatus.textContent = "Copy saved. You can now replace your tree.";
-          copyBtn.disabled = true;
-          return;
-        }
-      }
-      const url = URL.createObjectURL(blob);
-      const a = h("a", { href: url, download: fname, hidden: true });
-      document.body.append(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
-      copyStatus.textContent = "Copy saved to Downloads. You can now replace your tree.";
+      const how = await saveFile(fname, store.exportText(deviceName()));
+      if (!how) return;
+      copyStatus.textContent = (how === "shared" ? "Copy saved. " : whereItWent(how)[0] + " ") + "You can now replace your tree.";
       copyBtn.disabled = true;
-    } catch (err) {
-      if (err.name !== "AbortError") copyStatus.textContent = "The copy could not be saved. Try again.";
+    } catch {
+      copyStatus.textContent = "The copy could not be saved. Try again.";
     }
   });
 
