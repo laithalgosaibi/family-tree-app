@@ -33,6 +33,7 @@ Tap anyone to see how they are related to you, which side of the family they are
 Search by name with the magnifying glass on a phone, or the box at the top left on a Mac (⌘F). Other spellings match too, so Yusuf finds Yousef. When two people share a name, both sets of parents are shown so you can tell them apart.
 The relationship finder shows how any two people are related, both ways round, with the shared ancestors and every step between them. On a Mac it is the button at the top right (click a box to set To, ⌥-click to set From). On a phone it is in the ··· menu.
 A family you know but can't place yet can be started from the ··· menu: Start a separate branch. It sits beside your tree in a dashed frame. Tap anyone in it to see a possible link from the names (Salma's father's name is Hasan and she is an Azar, so Hasan Ali Azar may be her father), or Link another way. One link joins the whole branch.
+Add spouse can also link two people who are already in the tree, such as cousins who married: choose Already in the tree and search for them. Their cards then say husband or wife first, with "Also your first cousin" underneath.
 The small − under anyone with children folds away everyone below them. Tap +N to open it again, or Expand all at the top.
 
 ## Try it on a computer

@@ -308,6 +308,11 @@ dialog#sheet::backdrop { background: rgba(20, 18, 15, 0.35); }
 .context { margin: 0 0 18px; }
 
 .person-form { display: flex; flex-direction: column; gap: 16px; }
+.person-form [hidden] { display: none !important; }
+/* Adding a spouse who is already in the tree */
+.pick-existing { display: flex; flex-direction: column; gap: 12px; }
+.pick-existing .link-changes { margin-top: 4px; }
+.link-pick:disabled { opacity: .6; cursor: default; }
 
 .field { display: flex; flex-direction: column; gap: 6px; }
 .field-label { font-size: 15px; color: var(--muted); }
